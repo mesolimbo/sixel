@@ -1,0 +1,210 @@
+"""
+Renderer module for the snake game.
+
+Handles converting game state to sixel graphics.
+Separated from terminal handling for single responsibility.
+"""
+
+from game import GameState
+from sixel import (
+    pixels_to_sixel,
+    create_pixel_buffer,
+    fill_rect,
+    draw_text,
+    get_text_width,
+    COLOR_INDICES,
+    FONT_HEIGHT,
+)
+
+
+class GameRenderer:
+    """
+    Renders game state to sixel graphics.
+
+    Encapsulates all rendering logic including layout calculations,
+    text rendering, and sixel conversion.
+    """
+
+    def __init__(self, game: GameState):
+        """
+        Initialize renderer with game state.
+
+        Args:
+            game: The game state to render
+        """
+        self.game = game
+
+        # Layout constants
+        self.title_height = 50  # Space for title
+        self.status_height = 120  # Space for score and game over text
+        self.padding = 40  # Padding around game area
+
+        # Calculate dimensions
+        self.game_size = game.width * game.pixel_size
+        self.frame_width = self.game_size + self.padding
+        self.frame_height = self.title_height + self.game_size + self.status_height
+        self.game_area_y = self.title_height
+        self.game_area_x = (self.frame_width - self.game_size) // 2
+
+    def render_frame(self, show_game_over: bool = False) -> str:
+        """
+        Render the complete frame as a sixel string.
+
+        Args:
+            show_game_over: Whether to display game over text
+
+        Returns:
+            Sixel escape sequence string
+        """
+        pixels = create_pixel_buffer(
+            self.frame_width,
+            self.frame_height,
+            COLOR_INDICES["background"]
+        )
+
+        self._draw_frame_border(pixels)
+        self._draw_title(pixels)
+        self._draw_game_border(pixels)
+        self._draw_food(pixels)
+        self._draw_snake(pixels)
+        self._draw_score(pixels)
+
+        if show_game_over:
+            self._draw_game_over(pixels)
+
+        return pixels_to_sixel(pixels, self.frame_width, self.frame_height)
+
+    def _draw_frame_border(self, pixels: list) -> None:
+        """Draw the outer frame border."""
+        frame_color = COLOR_INDICES["text_green"]
+        border_width = 2
+
+        # Top edge
+        fill_rect(pixels, 0, 0, self.frame_width, border_width, frame_color)
+        # Bottom edge
+        fill_rect(
+            pixels, 0, self.frame_height - border_width,
+            self.frame_width, border_width, frame_color
+        )
+        # Left edge
+        fill_rect(pixels, 0, 0, border_width, self.frame_height, frame_color)
+        # Right edge
+        fill_rect(
+            pixels, self.frame_width - border_width, 0,
+            border_width, self.frame_height, frame_color
+        )
+
+    def _draw_title(self, pixels: list) -> None:
+        """Draw the game title."""
+        title = "SIXEL SNAKE"
+        title_scale = 4
+        title_width = get_text_width(title, title_scale)
+        title_x = (self.frame_width - title_width) // 2
+        title_y = 8
+        draw_text(pixels, title_x, title_y, title, COLOR_INDICES["text_green"], title_scale)
+
+    def _draw_game_border(self, pixels: list) -> None:
+        """Draw the border around the game area."""
+        ps = self.game.pixel_size
+        border_color = COLOR_INDICES["border"]
+        gx, gy = self.game_area_x, self.game_area_y
+
+        # Top and bottom
+        fill_rect(pixels, gx, gy, self.game_size, ps, border_color)
+        fill_rect(pixels, gx, gy + self.game_size - ps, self.game_size, ps, border_color)
+        # Left and right
+        fill_rect(pixels, gx, gy, ps, self.game_size, border_color)
+        fill_rect(pixels, gx + self.game_size - ps, gy, ps, self.game_size, border_color)
+
+    def _draw_food(self, pixels: list) -> None:
+        """Draw the food item."""
+        ps = self.game.pixel_size
+        fx, fy = self.game.food
+        fill_rect(
+            pixels,
+            self.game_area_x + fx * ps,
+            self.game_area_y + fy * ps,
+            ps, ps,
+            COLOR_INDICES["food"]
+        )
+
+    def _draw_snake(self, pixels: list) -> None:
+        """Draw the snake body and head."""
+        ps = self.game.pixel_size
+
+        # Draw body segments
+        for segment in self.game.snake[1:]:
+            sx, sy = segment
+            fill_rect(
+                pixels,
+                self.game_area_x + sx * ps,
+                self.game_area_y + sy * ps,
+                ps, ps,
+                COLOR_INDICES["snake_body"]
+            )
+
+        # Draw head
+        if self.game.snake:
+            hx, hy = self.game.snake[0]
+            fill_rect(
+                pixels,
+                self.game_area_x + hx * ps,
+                self.game_area_y + hy * ps,
+                ps, ps,
+                COLOR_INDICES["snake_head"]
+            )
+
+    def _draw_score(self, pixels: list) -> None:
+        """Draw the current score."""
+        score_text = f"SCORE: {self.game.score}"
+        score_scale = 2
+        score_width = get_text_width(score_text, score_scale)
+        score_x = (self.frame_width - score_width) // 2
+        score_y = self.game_area_y + self.game_size + 16
+        draw_text(pixels, score_x, score_y, score_text, COLOR_INDICES["text"], score_scale)
+
+    def _draw_game_over(self, pixels: list) -> None:
+        """Draw game over text and hints."""
+        score_scale = 2
+        score_y = self.game_area_y + self.game_size + 16
+
+        # Game over text
+        go_text = "GAME OVER!"
+        go_scale = 4
+        go_width = get_text_width(go_text, go_scale)
+        go_x = (self.frame_width - go_width) // 2
+        go_y = score_y + FONT_HEIGHT * score_scale + 16
+        draw_text(pixels, go_x, go_y, go_text, COLOR_INDICES["food"], go_scale)
+
+        # Hint text
+        hint_text = "'R' RESTART  'Q' QUIT"
+        hint_scale = 2
+        hint_width = get_text_width(hint_text, hint_scale)
+        hint_x = (self.frame_width - hint_width) // 2
+        hint_y = go_y + FONT_HEIGHT * go_scale + 12
+        draw_text(pixels, hint_x, hint_y, hint_text, COLOR_INDICES["text"], hint_scale)
+
+    def calculate_terminal_position(
+        self, term_cols: int, term_rows: int
+    ) -> tuple[int, int]:
+        """
+        Calculate the position to center the game in the terminal.
+
+        Args:
+            term_cols: Terminal width in columns
+            term_rows: Terminal height in rows
+
+        Returns:
+            Tuple of (row, col) for cursor positioning (1-indexed)
+        """
+        # Approximate character cell dimensions
+        pixels_per_col = 10
+        pixels_per_row = 20
+
+        sixel_char_width = self.frame_width // pixels_per_col
+        sixel_char_height = self.frame_height // pixels_per_row
+
+        center_col = max(1, (term_cols - sixel_char_width) // 2)
+        center_row = max(1, (term_rows - sixel_char_height) // 2)
+
+        return center_row, center_col
