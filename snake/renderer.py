@@ -34,10 +34,19 @@ class GameRenderer:
         """
         self.game = game
 
-        # Layout constants
-        self.title_height = 50  # Space for title
-        self.status_height = 120  # Space for score and game over text
-        self.padding = 40  # Padding around game area
+        # Scale factor based on pixel size (1x at 16px, 2x at 32px, etc.)
+        self.scale = game.pixel_size // 16
+
+        # Layout constants (scaled)
+        self.title_height = 50 * self.scale  # Space for title
+        self.status_height = 120 * self.scale  # Space for score and game over text
+        self.padding = 40 * self.scale  # Padding around game area
+
+        # Text scales (scaled)
+        self.title_scale = 4 * self.scale
+        self.score_scale = 2 * self.scale
+        self.game_over_scale = 4 * self.scale
+        self.hint_scale = 2 * self.scale
 
         # Calculate dimensions
         self.game_size = game.width * game.pixel_size
@@ -77,7 +86,7 @@ class GameRenderer:
     def _draw_frame_border(self, pixels: list) -> None:
         """Draw the outer frame border."""
         frame_color = COLOR_INDICES["text_green"]
-        border_width = 2
+        border_width = 2 * self.scale
 
         # Top edge
         fill_rect(pixels, 0, 0, self.frame_width, border_width, frame_color)
@@ -97,11 +106,10 @@ class GameRenderer:
     def _draw_title(self, pixels: list) -> None:
         """Draw the game title."""
         title = "SIXEL SNAKE"
-        title_scale = 4
-        title_width = get_text_width(title, title_scale)
+        title_width = get_text_width(title, self.title_scale)
         title_x = (self.frame_width - title_width) // 2
-        title_y = 8
-        draw_text(pixels, title_x, title_y, title, COLOR_INDICES["text_green"], title_scale)
+        title_y = 8 * self.scale
+        draw_text(pixels, title_x, title_y, title, COLOR_INDICES["text_green"], self.title_scale)
 
     def _draw_game_border(self, pixels: list) -> None:
         """Draw the border around the game area."""
@@ -157,32 +165,28 @@ class GameRenderer:
     def _draw_score(self, pixels: list) -> None:
         """Draw the current score."""
         score_text = f"SCORE: {self.game.score}"
-        score_scale = 2
-        score_width = get_text_width(score_text, score_scale)
+        score_width = get_text_width(score_text, self.score_scale)
         score_x = (self.frame_width - score_width) // 2
-        score_y = self.game_area_y + self.game_size + 16
-        draw_text(pixels, score_x, score_y, score_text, COLOR_INDICES["text"], score_scale)
+        score_y = self.game_area_y + self.game_size + 16 * self.scale
+        draw_text(pixels, score_x, score_y, score_text, COLOR_INDICES["text"], self.score_scale)
 
     def _draw_game_over(self, pixels: list) -> None:
         """Draw game over text and hints."""
-        score_scale = 2
-        score_y = self.game_area_y + self.game_size + 16
+        score_y = self.game_area_y + self.game_size + 16 * self.scale
 
         # Game over text
         go_text = "GAME OVER!"
-        go_scale = 4
-        go_width = get_text_width(go_text, go_scale)
+        go_width = get_text_width(go_text, self.game_over_scale)
         go_x = (self.frame_width - go_width) // 2
-        go_y = score_y + FONT_HEIGHT * score_scale + 16
-        draw_text(pixels, go_x, go_y, go_text, COLOR_INDICES["food"], go_scale)
+        go_y = score_y + FONT_HEIGHT * self.score_scale + 16 * self.scale
+        draw_text(pixels, go_x, go_y, go_text, COLOR_INDICES["food"], self.game_over_scale)
 
         # Hint text
         hint_text = "'R' RESTART  'Q' QUIT"
-        hint_scale = 2
-        hint_width = get_text_width(hint_text, hint_scale)
+        hint_width = get_text_width(hint_text, self.hint_scale)
         hint_x = (self.frame_width - hint_width) // 2
-        hint_y = go_y + FONT_HEIGHT * go_scale + 12
-        draw_text(pixels, hint_x, hint_y, hint_text, COLOR_INDICES["text"], hint_scale)
+        hint_y = go_y + FONT_HEIGHT * self.game_over_scale + 12 * self.scale
+        draw_text(pixels, hint_x, hint_y, hint_text, COLOR_INDICES["text"], self.hint_scale)
 
     def calculate_terminal_position(
         self, term_cols: int, term_rows: int
