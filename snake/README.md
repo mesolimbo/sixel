@@ -1,6 +1,8 @@
 # Snake Game with Sixel Graphics
 
-A tiny 64x64 snake game rendered using Sixel graphics in the terminal.
+A classic snake game rendered entirely using Sixel graphics in the terminal.
+
+![Sixel Snake Demo](demo/sixel-snake.gif)
 
 ## Requirements
 
@@ -77,18 +79,20 @@ snake/
 ├── Pipfile        # Python dependencies
 ├── main.py        # Entry point and configuration
 ├── game.py        # Snake game logic (state, rules, collision)
-├── sixel.py       # Sixel graphics generation
+├── sixel.py       # Sixel graphics generation with bitmap font
 ├── terminal.py    # Terminal handling and game loop
+├── demo/          # Demo assets
+│   └── sixel-snake.gif
 └── README.md      # This file
 ```
 
 ## Module Overview
 
-- **sixel.py**: Pure Sixel encoding logic with color palette support, pixel buffers, and sixel string generation. Can be reused for other Sixel-based projects.
+- **sixel.py**: Pure Sixel encoding with proper 6-pixel vertical banding, color palette support, pixel buffers, bitmap font rendering, and sixel string generation. Can be reused for other Sixel-based projects.
 
 - **game.py**: Game state and rules including snake movement, collision detection, food spawning, and scoring. Independent of rendering.
 
-- **terminal.py**: Terminal configuration, keyboard input handling (raw mode), and the main game loop with rendering.
+- **terminal.py**: Terminal configuration, keyboard input handling (cross-platform), and the main game loop. Renders everything as a single sixel image per frame.
 
 - **main.py**: Entry point that ties everything together with game configuration.
 

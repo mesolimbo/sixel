@@ -18,8 +18,8 @@ from game import create_game
 from terminal import run_game_loop, Terminal
 
 
-PIXEL_WIDTH = 128
-PIXEL_HEIGHT = 128
+PIXEL_WIDTH = 256
+PIXEL_HEIGHT = 256
 FPS = 8.0
 
 

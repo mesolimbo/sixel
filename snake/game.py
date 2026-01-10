@@ -27,7 +27,7 @@ class GameState:
     food: Tuple[int, int] = (0, 0)
     score: int = 0
     game_over: bool = False
-    pixel_size: int = 8  # Each game cell is 8x8 pixels
+    pixel_size: int = 16  # Each game cell is 16x16 pixels
 
     def __post_init__(self):
         if not self.snake:
@@ -127,8 +127,8 @@ def create_game(pixel_width: int = 128, pixel_height: int = 128) -> GameState:
     Returns:
         A new GameState instance
     """
-    # Each game cell is 8x8 pixels, so divide by pixel_size
-    pixel_size = 8
+    # Each game cell is 16x16 pixels, so divide by pixel_size
+    pixel_size = 16
     game_width = pixel_width // pixel_size
     game_height = pixel_height // pixel_size
 
