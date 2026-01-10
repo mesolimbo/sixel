@@ -14,13 +14,21 @@ Requirements:
 - Python 3.13+
 """
 
+import sys
+
 from game import create_game
 from game_loop import run_game_loop, wait_for_key
 from terminals import create_terminal
 
 
-PIXEL_WIDTH = 256
-PIXEL_HEIGHT = 256
+# Double size on macOS for Retina displays
+if sys.platform == 'darwin':
+    PIXEL_WIDTH = 512
+    PIXEL_HEIGHT = 512
+else:
+    PIXEL_WIDTH = 256
+    PIXEL_HEIGHT = 256
+
 FPS = 8.0
 
 
