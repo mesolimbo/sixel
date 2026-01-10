@@ -5,12 +5,18 @@ Handles the main game loop, input processing, and coordination
 between the terminal, renderer, and game state.
 """
 
+import sys
 import time
 from typing import Optional, Callable
 
 from game import GameState, Direction
 from renderer import GameRenderer
 from terminals import Terminal, KeyEvent
+
+# Platform-specific render settings
+# macOS with Retina needs lower render rate due to larger sixel data
+IS_MACOS = sys.platform == 'darwin'
+MIN_RENDER_INTERVAL = 0.1 if IS_MACOS else 0.05  # 10 FPS on macOS, 20 FPS elsewhere
 
 
 # Key mappings for direction control
@@ -121,8 +127,7 @@ def run_game_loop(
 
                 # 3. Render only if needed and enough time has passed
                 # Limit render rate to avoid overwhelming slow terminals
-                min_render_interval = 0.05  # Max 20 renders per second
-                if needs_render and (current_time - last_render >= min_render_interval):
+                if needs_render and (current_time - last_render >= MIN_RENDER_INTERVAL):
                     terminal.move_cursor(row, col)
                     cached_frame = renderer.render_frame(game.game_over)
                     terminal.write(cached_frame)
