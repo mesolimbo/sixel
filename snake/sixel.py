@@ -190,12 +190,12 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
     parts.append(f'"1;1;{width};{height}')
     parts.append(generate_palette())
 
-    # Get all colors used (excluding background for efficiency)
+    # Get all colors used (including background for proper rendering)
     colors_used = set()
+    colors_used.add(0)  # Always include background
     for row in pixels:
         for pixel in row:
-            if pixel != 0:  # Skip background
-                colors_used.add(pixel)
+            colors_used.add(pixel)
 
     # Process in bands of 6 rows
     for band_start in range(0, height, 6):

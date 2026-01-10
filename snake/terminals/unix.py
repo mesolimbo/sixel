@@ -5,6 +5,7 @@ Uses POSIX terminal APIs (termios, tty) for raw mode and input handling.
 Compatible with any Unix-like system including Linux, macOS, and BSD.
 """
 
+import os
 import select
 import shutil
 import sys
@@ -39,6 +40,7 @@ class UnixTerminal(Terminal):
     def __init__(self):
         self._old_settings: Optional[list] = None
         self._is_raw: bool = False
+        self._is_macos: bool = sys.platform == 'darwin'
 
     @property
     def is_raw(self) -> bool:
@@ -50,7 +52,12 @@ class UnixTerminal(Terminal):
         if self._is_raw:
             return
         self._old_settings = termios.tcgetattr(sys.stdin)
-        tty.setraw(sys.stdin.fileno())
+        # Use cbreak mode on macOS for better escape sequence handling
+        # Use raw mode on Linux for full control
+        if self._is_macos:
+            tty.setcbreak(sys.stdin.fileno())
+        else:
+            tty.setraw(sys.stdin.fileno())
         self._is_raw = True
 
     def exit_raw_mode(self) -> None:
@@ -83,15 +90,18 @@ class UnixTerminal(Terminal):
 
     def _read_escape_sequence(self) -> KeyEvent:
         """Parse escape sequence for arrow keys and other special keys."""
+        # Use longer timeout on macOS for reliable escape sequence reading
+        esc_timeout = 0.1 if self._is_macos else 0.05
+
         # Check if more characters are available
-        if not select.select([sys.stdin], [], [], 0.05)[0]:
+        if not select.select([sys.stdin], [], [], esc_timeout)[0]:
             return KeyEvent.special('escape')
 
         second = sys.stdin.read(1)
 
         # CSI sequences (ESC [)
         if second == '[':
-            if not select.select([sys.stdin], [], [], 0.05)[0]:
+            if not select.select([sys.stdin], [], [], esc_timeout)[0]:
                 return KeyEvent.special('escape')
 
             third = sys.stdin.read(1)
@@ -111,7 +121,7 @@ class UnixTerminal(Terminal):
 
         # SS3 sequences (ESC O) - some terminals use this for arrows
         if second == 'O':
-            if not select.select([sys.stdin], [], [], 0.05)[0]:
+            if not select.select([sys.stdin], [], [], esc_timeout)[0]:
                 return KeyEvent.special('escape')
 
             third = sys.stdin.read(1)
