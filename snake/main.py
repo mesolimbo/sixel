@@ -21,17 +21,18 @@ from game_loop import run_game_loop, wait_for_key
 from terminals import create_terminal
 
 
-# Double size on macOS for Retina displays
+# Platform-specific settings
 if sys.platform == 'darwin':
+    # macOS: Double size for Retina, faster snake
     PIXEL_WIDTH = 512
     PIXEL_HEIGHT = 512
-    PIXEL_SIZE = 32  # Larger cells for Retina
+    PIXEL_SIZE = 32
+    FPS = 12.0
 else:
     PIXEL_WIDTH = 256
     PIXEL_HEIGHT = 256
     PIXEL_SIZE = 16
-
-FPS = 8.0
+    FPS = 8.0
 
 
 def main() -> None:
