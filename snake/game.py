@@ -116,19 +116,22 @@ class GameState:
         self._spawn_food()
 
 
-def create_game(pixel_width: int = 128, pixel_height: int = 128) -> GameState:
+def create_game(
+    pixel_width: int = 128,
+    pixel_height: int = 128,
+    pixel_size: int = 16
+) -> GameState:
     """
     Create a new game state.
 
     Args:
         pixel_width: Total width in pixels
         pixel_height: Total height in pixels
+        pixel_size: Size of each game cell in pixels
 
     Returns:
         A new GameState instance
     """
-    # Each game cell is 16x16 pixels, so divide by pixel_size
-    pixel_size = 16
     game_width = pixel_width // pixel_size
     game_height = pixel_height // pixel_size
 
