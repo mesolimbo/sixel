@@ -40,8 +40,9 @@ def main() -> None:
     # Create terminal instance for the current platform
     terminal = create_terminal()
 
-    # ANSI colors for the welcome message
+    # ANSI colors
     GREEN = "\x1b[32m"
+    RED = "\x1b[91m"  # Bright red like the pellet
     RESET = "\x1b[0m"
 
     print("Snake Game - Sixel Graphics")
@@ -58,7 +59,7 @@ def main() -> None:
     game = create_game(PIXEL_WIDTH, PIXEL_HEIGHT, PIXEL_SIZE)
     run_game_loop(game, terminal, FPS)
 
-    print(f"Final score: {game.score}")
+    print(f"Final score: {RED}{game.score}{RESET}")
     print("Thanks for playing!")
 
 
