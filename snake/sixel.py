@@ -173,9 +173,44 @@ def get_text_width(text: str, scale: int = 1) -> int:
     return len(text) * (FONT_WIDTH + 1) * scale - scale
 
 
+def _encode_rle(sixel_chars: List[int]) -> str:
+    """
+    Encode a list of sixel values using Run-Length Encoding.
+
+    In sixel, !n<char> means repeat <char> n times.
+    This dramatically reduces output size for solid-color areas.
+    """
+    if not sixel_chars:
+        return ""
+
+    result = []
+    i = 0
+    while i < len(sixel_chars):
+        char = sixel_chars[i]
+        count = 1
+
+        # Count consecutive identical values
+        while i + count < len(sixel_chars) and sixel_chars[i + count] == char:
+            count += 1
+
+        sixel_char = chr(63 + char)
+        if count >= 3:
+            # Use RLE for 3+ repetitions
+            result.append(f"!{count}{sixel_char}")
+        else:
+            # Output individual characters for short runs
+            result.append(sixel_char * count)
+
+        i += count
+
+    return "".join(result)
+
+
 def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
     """
     Convert a 2D pixel buffer to a sixel string.
+
+    Uses RLE compression for efficient encoding of large solid-color areas.
 
     Args:
         pixels: 2D array of color indices [y][x]
@@ -205,20 +240,26 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
         # For each color, output the sixel data for this band
         first_color = True
         for color_idx in sorted(colors_used):
-            if not first_color:
-                parts.append(SIXEL_CARRIAGE_RETURN)
-            first_color = False
-
-            parts.append(f"#{color_idx}")
-
-            # Build sixel characters for this color in this band
+            # Build sixel values for this color in this band
+            sixel_values = []
             for x in range(width):
                 sixel_value = 0
                 for bit in range(6):
                     y = band_start + bit
                     if y < height and pixels[y][x] == color_idx:
                         sixel_value |= (1 << bit)
-                parts.append(chr(63 + sixel_value))
+                sixel_values.append(sixel_value)
+
+            # Skip this color if all values are zero (no pixels of this color)
+            if all(v == 0 for v in sixel_values):
+                continue
+
+            if not first_color:
+                parts.append(SIXEL_CARRIAGE_RETURN)
+            first_color = False
+
+            parts.append(f"#{color_idx}")
+            parts.append(_encode_rle(sixel_values))
 
     parts.append(SIXEL_END)
     return "".join(parts)
