@@ -51,13 +51,24 @@ class UnixTerminal(Terminal):
         """Enter raw mode for character-by-character input."""
         if self._is_raw:
             return
-        self._old_settings = termios.tcgetattr(sys.stdin)
-        # Use cbreak mode on macOS for better escape sequence handling
-        # Use raw mode on Linux for full control
-        if self._is_macos:
-            tty.setcbreak(sys.stdin.fileno())
-        else:
-            tty.setraw(sys.stdin.fileno())
+        fd = sys.stdin.fileno()
+        self._old_settings = termios.tcgetattr(fd)
+
+        # Configure terminal for raw input while preserving escape sequences
+        new_settings = termios.tcgetattr(fd)
+        # Input flags: disable ICRNL (CR to NL), IXON (XON/XOFF)
+        new_settings[0] = new_settings[0] & ~(termios.ICRNL | termios.IXON)
+        # Output flags: keep defaults
+        # Control flags: keep defaults
+        # Local flags: disable ICANON (canonical mode), ECHO, ISIG (signals)
+        new_settings[3] = new_settings[3] & ~(
+            termios.ICANON | termios.ECHO | termios.ISIG
+        )
+        # Control characters: VMIN=1, VTIME=0 (blocking read, 1 char min)
+        new_settings[6][termios.VMIN] = 1
+        new_settings[6][termios.VTIME] = 0
+
+        termios.tcsetattr(fd, termios.TCSAFLUSH, new_settings)
         self._is_raw = True
 
     def exit_raw_mode(self) -> None:
@@ -73,10 +84,17 @@ class UnixTerminal(Terminal):
 
         Handles escape sequences for arrow keys and other special keys.
         """
-        if not select.select([sys.stdin], [], [], timeout)[0]:
+        fd = sys.stdin.fileno()
+
+        if not select.select([fd], [], [], timeout)[0]:
             return None
 
-        char = sys.stdin.read(1)
+        # Use os.read for more reliable raw byte reading
+        data = os.read(fd, 1)
+        if not data:
+            return None
+
+        char = data.decode('utf-8', errors='replace')
 
         # Handle Ctrl-C
         if char == '\x03':
@@ -84,27 +102,33 @@ class UnixTerminal(Terminal):
 
         # Handle escape sequences
         if char == '\x1b':
-            return self._read_escape_sequence()
+            return self._read_escape_sequence(fd)
 
         return KeyEvent.character(char)
 
-    def _read_escape_sequence(self) -> KeyEvent:
+    def _read_escape_sequence(self, fd: int) -> KeyEvent:
         """Parse escape sequence for arrow keys and other special keys."""
         # Use longer timeout on macOS for reliable escape sequence reading
         esc_timeout = 0.1 if self._is_macos else 0.05
 
         # Check if more characters are available
-        if not select.select([sys.stdin], [], [], esc_timeout)[0]:
+        if not select.select([fd], [], [], esc_timeout)[0]:
             return KeyEvent.special('escape')
 
-        second = sys.stdin.read(1)
+        data = os.read(fd, 1)
+        if not data:
+            return KeyEvent.special('escape')
+        second = data.decode('utf-8', errors='replace')
 
         # CSI sequences (ESC [)
         if second == '[':
-            if not select.select([sys.stdin], [], [], esc_timeout)[0]:
+            if not select.select([fd], [], [], esc_timeout)[0]:
                 return KeyEvent.special('escape')
 
-            third = sys.stdin.read(1)
+            data = os.read(fd, 1)
+            if not data:
+                return KeyEvent.special('escape')
+            third = data.decode('utf-8', errors='replace')
 
             # Arrow keys
             arrow_map = {
@@ -121,10 +145,14 @@ class UnixTerminal(Terminal):
 
         # SS3 sequences (ESC O) - some terminals use this for arrows
         if second == 'O':
-            if not select.select([sys.stdin], [], [], esc_timeout)[0]:
+            if not select.select([fd], [], [], esc_timeout)[0]:
                 return KeyEvent.special('escape')
 
-            third = sys.stdin.read(1)
+            data = os.read(fd, 1)
+            if not data:
+                return KeyEvent.special('escape')
+            third = data.decode('utf-8', errors='replace')
+
             arrow_map = {
                 'A': 'up',
                 'B': 'down',

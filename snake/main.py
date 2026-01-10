@@ -25,9 +25,11 @@ from terminals import create_terminal
 if sys.platform == 'darwin':
     PIXEL_WIDTH = 512
     PIXEL_HEIGHT = 512
+    PIXEL_SIZE = 32  # Larger cells for Retina
 else:
     PIXEL_WIDTH = 256
     PIXEL_HEIGHT = 256
+    PIXEL_SIZE = 16
 
 FPS = 8.0
 
@@ -52,7 +54,7 @@ def main() -> None:
         return
 
     # Create and run the game
-    game = create_game(PIXEL_WIDTH, PIXEL_HEIGHT)
+    game = create_game(PIXEL_WIDTH, PIXEL_HEIGHT, PIXEL_SIZE)
     run_game_loop(game, terminal, FPS)
 
     print(f"Final score: {game.score}")
