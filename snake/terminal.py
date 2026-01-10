@@ -129,12 +129,19 @@ class Terminal:
 
         return char
 
+    def enter_alternate_screen(self) -> None:
+        """Enter alternate screen buffer (preserves original screen)."""
+        sys.stdout.write('\x1b[?1049h')
+        sys.stdout.flush()
+
+    def exit_alternate_screen(self) -> None:
+        """Exit alternate screen buffer (restores original screen)."""
+        sys.stdout.write('\x1b[?1049l')
+        sys.stdout.flush()
+
     def clear_screen(self) -> None:
         """Clear the terminal screen."""
-        if IS_WINDOWS:
-            sys.stdout.write('\x1b[2J\x1b[H')
-        else:
-            sys.stdout.write('\x1b[2J\x1b[H')
+        sys.stdout.write('\x1b[2J\x1b[H')
         sys.stdout.flush()
 
     def move_cursor_home(self) -> None:
@@ -216,6 +223,7 @@ def run_game_loop(
 
     try:
         terminal.enter_raw_mode()
+        terminal.enter_alternate_screen()
         terminal.hide_cursor()
         terminal.clear_screen()
 
@@ -280,7 +288,7 @@ def run_game_loop(
         pass
     finally:
         terminal.show_cursor()
+        terminal.exit_alternate_screen()
         terminal.exit_raw_mode()
-        sys.stdout.write('\n')
         if on_quit:
             on_quit()
