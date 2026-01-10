@@ -10,6 +10,14 @@ A tiny 64x64 snake game rendered using Sixel graphics in the terminal.
   - **Windows**: Windows Terminal (with Sixel support), mintty (Git Bash)
   - **Linux**: mlterm, xterm (with Sixel enabled), foot, kitty
 
+## Quick Start
+
+```bash
+cd snake
+make install
+make run
+```
+
 ## Installation
 
 1. Make sure you have Python 3.13 and pipenv installed:
@@ -21,7 +29,12 @@ A tiny 64x64 snake game rendered using Sixel graphics in the terminal.
 2. Install dependencies:
 
    ```bash
-   cd snake
+   make install
+   ```
+
+   Or manually:
+
+   ```bash
    pipenv install
    ```
 
@@ -30,14 +43,19 @@ A tiny 64x64 snake game rendered using Sixel graphics in the terminal.
 Run the game:
 
 ```bash
+make run
+```
+
+Or manually:
+
+```bash
 pipenv run python main.py
 ```
 
-Or activate the virtual environment first:
+See all available commands:
 
 ```bash
-pipenv shell
-python main.py
+make help
 ```
 
 ## Controls
@@ -55,6 +73,7 @@ python main.py
 
 ```
 snake/
+├── Makefile       # Build commands (install, run, clean, help)
 ├── Pipfile        # Python dependencies
 ├── main.py        # Entry point and configuration
 ├── game.py        # Snake game logic (state, rules, collision)
