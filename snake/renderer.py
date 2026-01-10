@@ -34,19 +34,22 @@ class GameRenderer:
         """
         self.game = game
 
-        # Scale factor based on pixel size (1x at 16px, 2x at 32px, etc.)
-        self.scale = game.pixel_size // 16
+        # Scale factor based on pixel size (1x at 16px, 1.5x at 24px, 2x at 32px)
+        scale_ratio = game.pixel_size / 16
 
         # Layout constants (scaled)
-        self.title_height = 50 * self.scale  # Space for title
-        self.status_height = 120 * self.scale  # Space for score and game over text
-        self.padding = 40 * self.scale  # Padding around game area
+        self.title_height = int(50 * scale_ratio)
+        self.status_height = int(120 * scale_ratio)
+        self.padding = int(40 * scale_ratio)
 
-        # Text scales (scaled)
-        self.title_scale = 4 * self.scale
-        self.score_scale = 2 * self.scale
-        self.game_over_scale = 4 * self.scale
-        self.hint_scale = 2 * self.scale
+        # Text scales (scaled, must be integers >= 1)
+        self.title_scale = max(1, int(4 * scale_ratio))
+        self.score_scale = max(1, int(2 * scale_ratio))
+        self.game_over_scale = max(1, int(4 * scale_ratio))
+        self.hint_scale = max(1, int(2 * scale_ratio))
+
+        # Spacing scale for consistent proportions
+        self.spacing_scale = scale_ratio
 
         # Calculate dimensions
         self.game_size = game.width * game.pixel_size
@@ -86,7 +89,7 @@ class GameRenderer:
     def _draw_frame_border(self, pixels: list) -> None:
         """Draw the outer frame border."""
         frame_color = COLOR_INDICES["text_green"]
-        border_width = 2 * self.scale
+        border_width = int(2 * self.spacing_scale)
 
         # Top edge
         fill_rect(pixels, 0, 0, self.frame_width, border_width, frame_color)
@@ -108,7 +111,7 @@ class GameRenderer:
         title = "SIXEL SNAKE"
         title_width = get_text_width(title, self.title_scale)
         title_x = (self.frame_width - title_width) // 2
-        title_y = 8 * self.scale
+        title_y = int(8 * self.spacing_scale)
         draw_text(pixels, title_x, title_y, title, COLOR_INDICES["text_green"], self.title_scale)
 
     def _draw_game_border(self, pixels: list) -> None:
@@ -167,25 +170,25 @@ class GameRenderer:
         score_text = f"SCORE: {self.game.score}"
         score_width = get_text_width(score_text, self.score_scale)
         score_x = (self.frame_width - score_width) // 2
-        score_y = self.game_area_y + self.game_size + 16 * self.scale
+        score_y = int(self.game_area_y + self.game_size + 16 * self.spacing_scale)
         draw_text(pixels, score_x, score_y, score_text, COLOR_INDICES["text"], self.score_scale)
 
     def _draw_game_over(self, pixels: list) -> None:
         """Draw game over text and hints."""
-        score_y = self.game_area_y + self.game_size + 16 * self.scale
+        score_y = int(self.game_area_y + self.game_size + 16 * self.spacing_scale)
 
         # Game over text
         go_text = "GAME OVER!"
         go_width = get_text_width(go_text, self.game_over_scale)
         go_x = (self.frame_width - go_width) // 2
-        go_y = score_y + FONT_HEIGHT * self.score_scale + 16 * self.scale
+        go_y = int(score_y + FONT_HEIGHT * self.score_scale + 16 * self.spacing_scale)
         draw_text(pixels, go_x, go_y, go_text, COLOR_INDICES["food"], self.game_over_scale)
 
         # Hint text
         hint_text = "'R' RESTART  'Q' QUIT"
         hint_width = get_text_width(hint_text, self.hint_scale)
         hint_x = (self.frame_width - hint_width) // 2
-        hint_y = go_y + FONT_HEIGHT * self.game_over_scale + 12 * self.scale
+        hint_y = int(go_y + FONT_HEIGHT * self.game_over_scale + 12 * self.spacing_scale)
         draw_text(pixels, hint_x, hint_y, hint_text, COLOR_INDICES["text"], self.hint_scale)
 
     def calculate_terminal_position(

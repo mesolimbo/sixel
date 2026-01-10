@@ -23,10 +23,10 @@ from terminals import create_terminal
 
 # Platform-specific settings
 if sys.platform == 'darwin':
-    # macOS: Double size for Retina, faster snake
-    PIXEL_WIDTH = 512
-    PIXEL_HEIGHT = 512
-    PIXEL_SIZE = 32
+    # macOS: 1.5x size for Retina (balance between size and performance)
+    PIXEL_WIDTH = 384
+    PIXEL_HEIGHT = 384
+    PIXEL_SIZE = 24
     FPS = 12.0
 else:
     PIXEL_WIDTH = 256
