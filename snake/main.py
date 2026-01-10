@@ -15,22 +15,42 @@ Requirements:
 """
 
 from game import create_game
-from terminal import run_game_loop
+from terminal import run_game_loop, Terminal
 
 
-PIXEL_WIDTH = 64
-PIXEL_HEIGHT = 64
+PIXEL_WIDTH = 128
+PIXEL_HEIGHT = 128
 FPS = 8.0
+
+
+def wait_for_spacebar() -> bool:
+    """Wait for spacebar press. Returns False if user wants to quit."""
+    terminal = Terminal()
+    try:
+        terminal.enter_raw_mode()
+        while True:
+            key = terminal.read_key(timeout=0.1)
+            if key == ' ':
+                return True
+            if key in ('q', 'Q', '\x03'):
+                return False
+    finally:
+        terminal.exit_raw_mode()
 
 
 def main() -> None:
     """Entry point for the snake game."""
-    print("Snake Game - Sixel Graphics")
-    print("Controls: WASD/Arrows to move, Q to quit, R to restart")
-    print("Starting in 2 seconds...")
+    # ANSI colors
+    GREEN = "\x1b[32m"
+    RESET = "\x1b[0m"
 
-    import time
-    time.sleep(2)
+    print("Snake Game - Sixel Graphics")
+    print(f"Controls: {GREEN}WASD{RESET}/{GREEN}Arrows{RESET} to move, {GREEN}Q{RESET} to quit, {GREEN}R{RESET} to restart")
+    print(f"Press {GREEN}SPACE{RESET} to start...")
+
+    if not wait_for_spacebar():
+        print("Goodbye!")
+        return
 
     game = create_game(PIXEL_WIDTH, PIXEL_HEIGHT)
     run_game_loop(game, PIXEL_WIDTH, PIXEL_HEIGHT, FPS)

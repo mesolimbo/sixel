@@ -2,14 +2,12 @@
 Terminal handling module.
 
 Handles keyboard input, terminal configuration, and the game loop.
+Cross-platform support for Windows and Unix.
 """
 
 import sys
-import select
-import termios
-import tty
-from typing import Optional, Callable
 import time
+from typing import Optional, Callable
 
 from game import GameState, Direction
 from sixel import (
@@ -18,6 +16,16 @@ from sixel import (
     fill_rect,
     COLOR_INDICES,
 )
+
+# Detect platform
+IS_WINDOWS = sys.platform == 'win32'
+
+if IS_WINDOWS:
+    import msvcrt
+else:
+    import select
+    import termios
+    import tty
 
 
 # Key mappings
@@ -33,11 +41,19 @@ KEY_MAP = {
     'D': Direction.RIGHT,
 }
 
-# Arrow key escape sequences
-ARROW_UP = '\x1b[A'
-ARROW_DOWN = '\x1b[B'
-ARROW_RIGHT = '\x1b[C'
-ARROW_LEFT = '\x1b[D'
+# Arrow key codes
+if IS_WINDOWS:
+    # Windows arrow keys (after 0xE0 prefix)
+    ARROW_UP = 'H'
+    ARROW_DOWN = 'P'
+    ARROW_LEFT = 'K'
+    ARROW_RIGHT = 'M'
+else:
+    # Unix escape sequences
+    ARROW_UP = '\x1b[A'
+    ARROW_DOWN = '\x1b[B'
+    ARROW_RIGHT = '\x1b[C'
+    ARROW_LEFT = '\x1b[D'
 
 
 class Terminal:
@@ -51,15 +67,16 @@ class Terminal:
         """Put the terminal into raw mode for character-by-character input."""
         if self.is_raw:
             return
-        self.old_settings = termios.tcgetattr(sys.stdin)
-        tty.setraw(sys.stdin.fileno())
+        if not IS_WINDOWS:
+            self.old_settings = termios.tcgetattr(sys.stdin)
+            tty.setraw(sys.stdin.fileno())
         self.is_raw = True
 
     def exit_raw_mode(self) -> None:
         """Restore the terminal to its original mode."""
-        if self.old_settings is not None:
+        if not IS_WINDOWS and self.old_settings is not None:
             termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
-            self.is_raw = False
+        self.is_raw = False
 
     def read_key(self, timeout: float = 0.0) -> Optional[str]:
         """
@@ -71,6 +88,32 @@ class Terminal:
         Returns:
             The key pressed, or None if no input available
         """
+        if IS_WINDOWS:
+            return self._read_key_windows(timeout)
+        else:
+            return self._read_key_unix(timeout)
+
+    def _read_key_windows(self, timeout: float) -> Optional[str]:
+        """Read key on Windows using msvcrt."""
+        start = time.time()
+        while True:
+            if msvcrt.kbhit():
+                ch = msvcrt.getch()
+                # Handle special keys (arrows, function keys)
+                if ch in (b'\x00', b'\xe0'):
+                    if msvcrt.kbhit():
+                        special = msvcrt.getch().decode('latin-1')
+                        # Return arrow key identifier
+                        return ('ARROW', special)
+                return ch.decode('latin-1')
+            if timeout > 0 and (time.time() - start) >= timeout:
+                return None
+            if timeout == 0:
+                return None
+            time.sleep(0.01)
+
+    def _read_key_unix(self, timeout: float) -> Optional[str]:
+        """Read key on Unix using select and termios."""
         if not select.select([sys.stdin], [], [], timeout)[0]:
             return None
 
@@ -88,7 +131,10 @@ class Terminal:
 
     def clear_screen(self) -> None:
         """Clear the terminal screen."""
-        sys.stdout.write('\x1b[2J\x1b[H')
+        if IS_WINDOWS:
+            sys.stdout.write('\x1b[2J\x1b[H')
+        else:
+            sys.stdout.write('\x1b[2J\x1b[H')
         sys.stdout.flush()
 
     def move_cursor_home(self) -> None:
@@ -180,13 +226,24 @@ def run_game_loop(
             key = terminal.read_key(timeout=0.01)
 
             if key:
+                # Handle Windows arrow keys (returned as tuple)
+                if isinstance(key, tuple) and key[0] == 'ARROW':
+                    arrow = key[1]
+                    if arrow == ARROW_UP:
+                        game.change_direction(Direction.UP)
+                    elif arrow == ARROW_DOWN:
+                        game.change_direction(Direction.DOWN)
+                    elif arrow == ARROW_LEFT:
+                        game.change_direction(Direction.LEFT)
+                    elif arrow == ARROW_RIGHT:
+                        game.change_direction(Direction.RIGHT)
                 # Check for quit
-                if key in ('q', 'Q', '\x03'):  # q or Ctrl-C
+                elif key in ('q', 'Q', '\x03'):  # q or Ctrl-C
                     break
-
-                # Check for direction keys
-                if key in KEY_MAP:
+                # Check for direction keys (WASD)
+                elif key in KEY_MAP:
                     game.change_direction(KEY_MAP[key])
+                # Unix arrow keys
                 elif key == ARROW_UP:
                     game.change_direction(Direction.UP)
                 elif key == ARROW_DOWN:
@@ -195,7 +252,7 @@ def run_game_loop(
                     game.change_direction(Direction.LEFT)
                 elif key == ARROW_RIGHT:
                     game.change_direction(Direction.RIGHT)
-                elif key == 'r' or key == 'R':
+                elif key in ('r', 'R'):
                     # Restart game
                     game.reset()
 
@@ -210,9 +267,13 @@ def run_game_loop(
                 terminal.move_cursor_home()
                 frame = render_game(game, pixel_width, pixel_height)
                 sys.stdout.write(frame)
-                sys.stdout.write(f"\n\rScore: {game.score}")
+
+                # Build status line with fixed width to prevent flicker
                 if game.game_over:
-                    sys.stdout.write("  GAME OVER! Press 'r' to restart, 'q' to quit")
+                    status = f"Score: {game.score}  GAME OVER! Press 'r' to restart, 'q' to quit"
+                else:
+                    status = f"Score: {game.score}"
+                sys.stdout.write(f"\n\r{status:<60}")
                 sys.stdout.flush()
 
     except KeyboardInterrupt:
