@@ -4,11 +4,13 @@ Pytest fixtures for snake game tests.
 
 import sys
 import pytest
+from pathlib import Path
 from typing import Optional, Tuple
 from unittest.mock import MagicMock
 
 # Add the snake package to the path
-sys.path.insert(0, str(__file__).rsplit('/tests', 1)[0])
+snake_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(snake_dir))
 
 from game import GameState, Direction, create_game
 from terminals.base import Terminal, KeyEvent, KeyType
