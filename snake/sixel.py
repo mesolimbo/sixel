@@ -318,3 +318,160 @@ def pixels_to_png(
         img.save(output_path)
 
     return img
+
+
+def decode_sixel(sixel_data: str) -> Optional[List[List[Tuple[int, int, int]]]]:
+    """
+    Decode a sixel string back into a 2D array of RGB tuples.
+
+    This parses actual sixel output to verify the encoding is correct.
+
+    Args:
+        sixel_data: The sixel escape sequence string
+
+    Returns:
+        2D array of RGB tuples [y][x], or None if parsing fails
+    """
+    # Strip the DCS introducer and ST terminator
+    if sixel_data.startswith(SIXEL_START):
+        sixel_data = sixel_data[len(SIXEL_START):]
+    if sixel_data.endswith(SIXEL_END):
+        sixel_data = sixel_data[:-len(SIXEL_END)]
+
+    # Parse raster attributes to get dimensions
+    width, height = 0, 0
+    palette: Dict[int, Tuple[int, int, int]] = {}
+
+    # State for parsing
+    current_color = 0
+    x, y = 0, 0
+    pixels: List[List[Tuple[int, int, int]]] = []
+
+    i = 0
+    while i < len(sixel_data):
+        char = sixel_data[i]
+
+        if char == '"':
+            # Raster attributes: "Pan;Pad;Ph;Pv
+            i += 1
+            end = i
+            while end < len(sixel_data) and sixel_data[end] not in '#-$?\x1b':
+                end += 1
+            parts = sixel_data[i:end].split(';')
+            if len(parts) >= 4:
+                width = int(parts[2])
+                height = int(parts[3])
+                # Initialize pixel buffer with black
+                pixels = [[(0, 0, 0) for _ in range(width)] for _ in range(height)]
+            i = end
+
+        elif char == '#':
+            # Color definition or selection
+            i += 1
+            end = i
+            while end < len(sixel_data) and sixel_data[end] in '0123456789;':
+                end += 1
+            color_spec = sixel_data[i:end]
+            parts = color_spec.split(';')
+
+            if len(parts) >= 5 and parts[1] == '2':
+                # Color definition: #Pc;2;Pr;Pg;Pb (RGB mode)
+                color_idx = int(parts[0])
+                r = int(parts[2]) * 255 // 100
+                g = int(parts[3]) * 255 // 100
+                b = int(parts[4]) * 255 // 100
+                palette[color_idx] = (r, g, b)
+            elif len(parts) == 1:
+                # Color selection: #Pc
+                current_color = int(parts[0])
+
+            i = end
+
+        elif char == '!':
+            # RLE: !<count><char>
+            i += 1
+            end = i
+            while end < len(sixel_data) and sixel_data[end].isdigit():
+                end += 1
+            count = int(sixel_data[i:end])
+            i = end
+            if i < len(sixel_data):
+                sixel_char = sixel_data[i]
+                sixel_value = ord(sixel_char) - 63
+                color = palette.get(current_color, (0, 0, 0))
+                for _ in range(count):
+                    if x < width:
+                        for bit in range(6):
+                            py = y + bit
+                            if py < height and (sixel_value & (1 << bit)):
+                                pixels[py][x] = color
+                        x += 1
+                i += 1
+
+        elif char == '-':
+            # Graphics new line (move to next band)
+            y += 6
+            x = 0
+            i += 1
+
+        elif char == '$':
+            # Graphics carriage return (back to start of band)
+            x = 0
+            i += 1
+
+        elif '?' <= char <= '~':
+            # Sixel data character
+            sixel_value = ord(char) - 63
+            color = palette.get(current_color, (0, 0, 0))
+            if x < width:
+                for bit in range(6):
+                    py = y + bit
+                    if py < height and (sixel_value & (1 << bit)):
+                        pixels[py][x] = color
+                x += 1
+            i += 1
+
+        else:
+            i += 1
+
+    return pixels if pixels else None
+
+
+def sixel_to_png(
+    sixel_data: str,
+    output_path: str
+) -> bool:
+    """
+    Decode a sixel string and save it as a PNG image.
+
+    This tests the full round-trip: the sixel output that would be
+    sent to a terminal is decoded back into pixels and saved.
+
+    Args:
+        sixel_data: The sixel escape sequence string
+        output_path: Path to save the PNG file
+
+    Returns:
+        True if successful, False otherwise
+    """
+    if not PIL_AVAILABLE:
+        return False
+
+    pixels = decode_sixel(sixel_data)
+    if not pixels:
+        return False
+
+    height = len(pixels)
+    width = len(pixels[0]) if height > 0 else 0
+
+    if width == 0 or height == 0:
+        return False
+
+    img = Image.new("RGB", (width, height))
+    img_data = [pixel for row in pixels for pixel in row]
+    img.putdata(img_data)
+
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    img.save(output_path)
+
+    return True

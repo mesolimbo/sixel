@@ -9,7 +9,7 @@ from game import GameState
 from typing import Optional
 from sixel import (
     pixels_to_sixel,
-    pixels_to_png,
+    sixel_to_png,
     create_pixel_buffer,
     fill_rect,
     draw_text,
@@ -233,6 +233,10 @@ class GameRenderer:
         """
         Save a screenshot of the current game state as a PNG.
 
+        This uses the full round-trip: renders to sixel format, then
+        decodes that sixel back to pixels to verify the encoding.
+        The resulting PNG shows exactly what a sixel terminal would display.
+
         Args:
             output_path: Path to save the PNG file
             show_game_over: Whether to display game over text
@@ -240,21 +244,8 @@ class GameRenderer:
         Returns:
             True if screenshot was saved successfully, False otherwise
         """
-        pixels = create_pixel_buffer(
-            self.frame_width,
-            self.frame_height,
-            COLOR_INDICES["background"]
-        )
+        # Generate the actual sixel output (what would be sent to terminal)
+        sixel_output = self.render_frame(show_game_over=show_game_over)
 
-        self._draw_frame_border(pixels)
-        self._draw_title(pixels)
-        self._draw_game_border(pixels)
-        self._draw_food(pixels)
-        self._draw_snake(pixels)
-        self._draw_score(pixels)
-
-        if show_game_over:
-            self._draw_game_over(pixels)
-
-        img = pixels_to_png(pixels, output_path)
-        return img is not None
+        # Decode the sixel back to pixels and save as PNG
+        return sixel_to_png(sixel_output, output_path)
