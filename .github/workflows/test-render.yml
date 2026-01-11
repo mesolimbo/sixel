@@ -89,4 +89,47 @@ jobs:
           name: game-screenshots-${{ matrix.os }}
           path: snake/screenshots/
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 14
+
+  cleanup-old-screenshots:
+    name: Cleanup Old Screenshots
+    runs-on: ubuntu-latest
+    needs: e2e-matrix
+    if: always()
+    permissions:
+      actions: write
+
+    steps:
+      - name: Delete old screenshot artifacts (keep last 5 per OS)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prefixes = ['game-screenshots-ubuntu-latest', 'game-screenshots-macos-latest', 'game-screenshots-windows-latest'];
+            const keepCount = 5;
+
+            for (const prefix of prefixes) {
+              // List all artifacts matching this prefix
+              const artifacts = await github.rest.actions.listArtifactsForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                per_page: 100
+              });
+
+              // Filter to matching artifacts and sort by creation date (newest first)
+              const matching = artifacts.data.artifacts
+                .filter(a => a.name === prefix)
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+              // Delete all but the most recent 'keepCount'
+              const toDelete = matching.slice(keepCount);
+              for (const artifact of toDelete) {
+                console.log(`Deleting ${artifact.name} (id: ${artifact.id}, created: ${artifact.created_at})`);
+                await github.rest.actions.deleteArtifact({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  artifact_id: artifact.id
+                });
+              }
+
+              console.log(`${prefix}: kept ${Math.min(matching.length, keepCount)}, deleted ${toDelete.length}`);
+            }
