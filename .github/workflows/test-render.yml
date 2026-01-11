@@ -44,14 +44,8 @@ jobs:
 
       - name: Build image if pull failed
         if: steps.pull.outcome == 'failure'
-        uses: docker/build-push-action@v5
-        with:
-          context: ./snake
-          push: false
-          load: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+        run: |
+          docker build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest ./snake
 
       - name: Run E2E render tests
         run: |
