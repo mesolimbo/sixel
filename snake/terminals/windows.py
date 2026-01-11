@@ -5,12 +5,18 @@ Uses msvcrt for keyboard input and Windows Console API for terminal control.
 Note: Sixel support on Windows requires Windows Terminal or similar.
 """
 
+import ctypes
 import shutil
+import signal
 import sys
 import time
 from typing import Optional, Tuple
 
 from .base import Terminal, KeyEvent
+
+# Windows Console API constants
+STD_INPUT_HANDLE = -10
+ENABLE_PROCESSED_INPUT = 0x0001
 
 
 class WindowsTerminal(Terminal):
@@ -45,12 +51,20 @@ class WindowsTerminal(Terminal):
 
     def __init__(self):
         self._is_raw: bool = False
+        self._old_console_mode: Optional[int] = None
+        self._kernel32 = None
         # Import msvcrt here to avoid import errors on Unix
         try:
             import msvcrt
             self._msvcrt = msvcrt
         except ImportError:
             raise RuntimeError("WindowsTerminal requires Windows with msvcrt")
+
+        # Get kernel32 handle for console mode manipulation
+        try:
+            self._kernel32 = ctypes.windll.kernel32
+        except AttributeError:
+            pass  # Not on Windows, kernel32 not available
 
     @property
     def is_raw(self) -> bool:
@@ -61,13 +75,39 @@ class WindowsTerminal(Terminal):
         """
         Enter raw mode.
 
-        On Windows, msvcrt already provides unbuffered input,
-        so this just sets a flag.
+        On Windows, msvcrt already provides unbuffered input.
+        We also disable ENABLE_PROCESSED_INPUT to prevent Ctrl+C
+        from generating SIGINT, allowing us to read it as a character.
         """
+        if self._kernel32:
+            # Get stdin handle
+            stdin_handle = self._kernel32.GetStdHandle(STD_INPUT_HANDLE)
+            # Save current console mode
+            mode = ctypes.c_ulong()
+            if self._kernel32.GetConsoleMode(stdin_handle, ctypes.byref(mode)):
+                self._old_console_mode = mode.value
+                # Disable ENABLE_PROCESSED_INPUT to prevent Ctrl+C from
+                # generating SIGINT - instead it will be read as '\x03'
+                new_mode = mode.value & ~ENABLE_PROCESSED_INPUT
+                self._kernel32.SetConsoleMode(stdin_handle, new_mode)
+
+        # Also ignore SIGINT at Python level as a fallback
+        self._old_sigint = signal.signal(signal.SIGINT, signal.SIG_IGN)
         self._is_raw = True
 
     def exit_raw_mode(self) -> None:
-        """Exit raw mode."""
+        """Exit raw mode and restore console settings."""
+        # Restore original SIGINT handler
+        if hasattr(self, '_old_sigint') and self._old_sigint is not None:
+            signal.signal(signal.SIGINT, self._old_sigint)
+            self._old_sigint = None
+
+        # Restore original console mode
+        if self._kernel32 and self._old_console_mode is not None:
+            stdin_handle = self._kernel32.GetStdHandle(STD_INPUT_HANDLE)
+            self._kernel32.SetConsoleMode(stdin_handle, self._old_console_mode)
+            self._old_console_mode = None
+
         self._is_raw = False
 
     def read_key(self, timeout: float = 0.0) -> Optional[KeyEvent]:
