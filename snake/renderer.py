@@ -6,8 +6,10 @@ Separated from terminal handling for single responsibility.
 """
 
 from game import GameState
+from typing import Optional
 from sixel import (
     pixels_to_sixel,
+    pixels_to_png,
     create_pixel_buffer,
     fill_rect,
     draw_text,
@@ -215,3 +217,37 @@ class GameRenderer:
         center_row = max(1, (term_rows - sixel_char_height) // 2)
 
         return center_row, center_col
+
+    def save_screenshot(
+        self,
+        output_path: str,
+        show_game_over: bool = False
+    ) -> bool:
+        """
+        Save a screenshot of the current game state as a PNG.
+
+        Args:
+            output_path: Path to save the PNG file
+            show_game_over: Whether to display game over text
+
+        Returns:
+            True if screenshot was saved successfully, False otherwise
+        """
+        pixels = create_pixel_buffer(
+            self.frame_width,
+            self.frame_height,
+            COLOR_INDICES["background"]
+        )
+
+        self._draw_frame_border(pixels)
+        self._draw_title(pixels)
+        self._draw_game_border(pixels)
+        self._draw_food(pixels)
+        self._draw_snake(pixels)
+        self._draw_score(pixels)
+
+        if show_game_over:
+            self._draw_game_over(pixels)
+
+        img = pixels_to_png(pixels, output_path)
+        return img is not None

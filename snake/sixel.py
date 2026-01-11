@@ -5,7 +5,14 @@ Sixel encodes 6 vertical pixels per character. Each character value is 63 + bitm
 where bit 0 = top pixel, bit 5 = bottom pixel.
 """
 
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
+from pathlib import Path
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 # Sixel escape sequences
 SIXEL_START = "\x1bPq"
@@ -263,3 +270,51 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
 
     parts.append(SIXEL_END)
     return "".join(parts)
+
+
+def _get_color_index_to_rgb() -> Dict[int, Tuple[int, int, int]]:
+    """Create a mapping from color index to RGB tuple."""
+    return {idx: COLORS[name] for name, idx in COLOR_INDICES.items()}
+
+
+def pixels_to_png(
+    pixels: List[List[int]],
+    output_path: Optional[str] = None
+) -> Optional["Image.Image"]:
+    """
+    Convert a 2D pixel buffer to a PNG image.
+
+    Args:
+        pixels: 2D array of color indices [y][x]
+        output_path: Optional path to save the PNG file
+
+    Returns:
+        PIL Image object if PIL is available, None otherwise
+    """
+    if not PIL_AVAILABLE:
+        return None
+
+    height = len(pixels)
+    width = len(pixels[0]) if height > 0 else 0
+
+    if width == 0 or height == 0:
+        return None
+
+    # Create RGB image
+    img = Image.new("RGB", (width, height))
+    color_map = _get_color_index_to_rgb()
+
+    # Convert pixel buffer to image
+    img_data = []
+    for row in pixels:
+        for color_idx in row:
+            rgb = color_map.get(color_idx, (0, 0, 0))
+            img_data.append(rgb)
+
+    img.putdata(img_data)
+
+    if output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        img.save(output_path)
+
+    return img
