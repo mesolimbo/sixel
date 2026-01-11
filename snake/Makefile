@@ -55,7 +55,7 @@ unit:
 	pipenv run python -m pytest tests/ -v -k "not e2e"
 
 e2e:
-	pipenv run pytest tests/ -v --tb=short
+	pipenv run pytest tests/test_render_e2e.py -v --tb=short
 
 e2e-docker: docker-build
 	docker run --rm $(DOCKER_IMAGE)

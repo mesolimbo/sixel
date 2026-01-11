@@ -23,5 +23,5 @@ COPY . .
 # Set PYTHONPATH for imports
 ENV PYTHONPATH=/app
 
-# Default command runs the E2E tests
-CMD ["pytest", "tests/", "-v", "--tb=short"]
+# Default command runs the E2E render tests
+CMD ["pytest", "tests/test_render_e2e.py", "-v", "--tb=short"]
