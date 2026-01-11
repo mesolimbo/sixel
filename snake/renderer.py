@@ -18,6 +18,8 @@ from sixel import (
     FONT_HEIGHT,
 )
 
+GAME_TITLE = "SIXEL SNAKE"
+
 
 class GameRenderer:
     """
@@ -55,7 +57,13 @@ class GameRenderer:
 
         # Calculate dimensions
         self.game_size = game.width * game.pixel_size
-        self.frame_width = self.game_size + self.padding
+        game_based_width = self.game_size + self.padding
+
+        # Ensure frame is wide enough for the title
+        title_width = get_text_width(GAME_TITLE, self.title_scale)
+        min_title_width = title_width + self.padding
+
+        self.frame_width = max(game_based_width, min_title_width)
         self.frame_height = self.title_height + self.game_size + self.status_height
         self.game_area_y = self.title_height
         self.game_area_x = (self.frame_width - self.game_size) // 2
@@ -110,11 +118,10 @@ class GameRenderer:
 
     def _draw_title(self, pixels: list) -> None:
         """Draw the game title."""
-        title = "SIXEL SNAKE"
-        title_width = get_text_width(title, self.title_scale)
+        title_width = get_text_width(GAME_TITLE, self.title_scale)
         title_x = (self.frame_width - title_width) // 2
         title_y = int(8 * self.spacing_scale)
-        draw_text(pixels, title_x, title_y, title, COLOR_INDICES["text_green"], self.title_scale)
+        draw_text(pixels, title_x, title_y, GAME_TITLE, COLOR_INDICES["text_green"], self.title_scale)
 
     def _draw_game_border(self, pixels: list) -> None:
         """Draw the border around the game area."""
