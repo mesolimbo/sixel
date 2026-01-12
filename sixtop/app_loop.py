@@ -24,6 +24,7 @@ UPDATE_INTERVAL = 1.0  # Update metrics once per second
 # ANSI escape codes
 SAVE_CURSOR = "\x1b[s"
 RESTORE_CURSOR = "\x1b[u"
+MOVE_UP = "\x1b[{}A"  # Move cursor up N lines
 
 
 class InputThread(threading.Thread):
@@ -110,20 +111,23 @@ def run_app_loop(
     # Track if we've collected stats yet
     stats_ready = False
 
+    # Calculate how many terminal rows the sixel output occupies
+    # Sixel uses 6 pixels per character row, plus 1 for top margin
+    sixel_rows = (renderer.height + 5) // 6 + 1
+
     def render_frame():
         """Helper to render and display a frame."""
         frame = renderer.render_frame(metrics, stats_ready=stats_ready)
-        terminal.write(RESTORE_CURSOR)
-        terminal.write(SAVE_CURSOR)
-        # Add top margin (newline) then the sixel frame
-        terminal.write("\n")
+        # Move cursor up to start position, then render
+        terminal.write(MOVE_UP.format(sixel_rows))
+        terminal.write("\n")  # Top margin
         terminal.write(frame)
         terminal.flush()
 
     try:
         with terminal:
-            # Save cursor position for redrawing in place
-            terminal.write(SAVE_CURSOR)
+            # Reserve space by printing blank lines, then move cursor back up
+            terminal.write("\n" * sixel_rows)
             terminal.flush()
 
             # Start input thread after entering raw mode

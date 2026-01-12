@@ -169,7 +169,7 @@ def draw_rounded_corner(
     corner: str
 ) -> None:
     """
-    Draw a rounded corner.
+    Draw a rounded corner using Bresenham's circle algorithm.
 
     Args:
         pixels: The pixel buffer
@@ -179,20 +179,32 @@ def draw_rounded_corner(
         corner: One of 'tl' (top-left), 'tr' (top-right),
                 'bl' (bottom-left), 'br' (bottom-right)
     """
-    # Draw a quarter circle arc using simple pixel approximation
-    for i in range(radius + 1):
-        for j in range(radius + 1):
-            # Check if point is on the edge of the circle
-            dist_sq = i * i + j * j
-            if (radius - 1) ** 2 <= dist_sq <= (radius + 1) ** 2:
-                if corner == 'tl':
-                    set_pixel(pixels, x + radius - i, y + radius - j, color_idx)
-                elif corner == 'tr':
-                    set_pixel(pixels, x + i, y + radius - j, color_idx)
-                elif corner == 'bl':
-                    set_pixel(pixels, x + radius - i, y + j, color_idx)
-                elif corner == 'br':
-                    set_pixel(pixels, x + i, y + j, color_idx)
+    # Bresenham's midpoint circle algorithm for clean single-pixel arc
+    cx = radius
+    cy = 0
+    d = 1 - radius
+
+    while cx >= cy:
+        # Plot the appropriate quadrant based on corner type
+        if corner == 'tl':
+            set_pixel(pixels, x + radius - cx, y + radius - cy, color_idx)
+            set_pixel(pixels, x + radius - cy, y + radius - cx, color_idx)
+        elif corner == 'tr':
+            set_pixel(pixels, x + cx, y + radius - cy, color_idx)
+            set_pixel(pixels, x + cy, y + radius - cx, color_idx)
+        elif corner == 'bl':
+            set_pixel(pixels, x + radius - cx, y + cy, color_idx)
+            set_pixel(pixels, x + radius - cy, y + cx, color_idx)
+        elif corner == 'br':
+            set_pixel(pixels, x + cx, y + cy, color_idx)
+            set_pixel(pixels, x + cy, y + cx, color_idx)
+
+        cy += 1
+        if d < 0:
+            d += 2 * cy + 1
+        else:
+            cx -= 1
+            d += 2 * (cy - cx) + 1
 
 
 def draw_rounded_rect_border(
