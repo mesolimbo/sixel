@@ -25,8 +25,8 @@ from terminals import create_terminal
 
 
 # Display settings
-FRAME_WIDTH = 600
-FRAME_HEIGHT = 180
+FRAME_WIDTH = 580
+FRAME_HEIGHT = 108  # Compact height (40% shorter)
 
 
 def main() -> None:

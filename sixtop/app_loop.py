@@ -3,10 +3,14 @@ Application loop module for sixtop.
 
 Handles the main loop, input processing, and coordination
 between the terminal, renderer, and metrics collection.
+
+Uses threading to ensure responsive input even during rendering.
 """
 
 import sys
 import time
+import threading
+from queue import Queue, Empty
 from typing import Optional, Callable
 
 from metrics import MetricsCollector
@@ -14,9 +18,38 @@ from renderer import MetricsRenderer, MetricView, VIEW_TITLES
 from terminals import Terminal, KeyEvent
 
 
-# Update intervals
-METRICS_UPDATE_INTERVAL = 1.0  # Update metrics every second
-RENDER_INTERVAL = 0.5  # Render at 2 FPS (sufficient for monitoring)
+# Update interval
+UPDATE_INTERVAL = 1.0  # Update and render once per second
+
+
+class InputThread(threading.Thread):
+    """
+    Background thread for reading keyboard input.
+
+    Reads keys continuously and puts them in a queue for the main thread.
+    """
+
+    def __init__(self, terminal: Terminal, key_queue: Queue):
+        super().__init__(daemon=True)
+        self.terminal = terminal
+        self.key_queue = key_queue
+        self.running = True
+
+    def run(self) -> None:
+        """Continuously read keys and queue them."""
+        while self.running:
+            try:
+                # Short timeout to allow checking self.running
+                key = self.terminal.read_key(timeout=0.05)
+                if key is not None:
+                    self.key_queue.put(key)
+            except Exception:
+                # Terminal might be closed, stop gracefully
+                break
+
+    def stop(self) -> None:
+        """Signal the thread to stop."""
+        self.running = False
 
 
 def process_input(key: Optional[KeyEvent], renderer: MetricsRenderer) -> bool:
@@ -39,7 +72,7 @@ def process_input(key: Optional[KeyEvent], renderer: MetricsRenderer) -> bool:
 
     # Check for tab (t) to switch views
     if key.key_type.value == 'character' and key.value.lower() == 't':
-        new_view = renderer.next_view()
+        renderer.next_view()
         return True
 
     return True
@@ -54,8 +87,8 @@ def run_app_loop(
     """
     Run the main application loop.
 
-    Uses separate timing for metrics updates and rendering to maintain
-    responsive input even when rendering is slow.
+    Uses a separate thread for input handling to ensure responsiveness
+    even during rendering. Renders once per second.
 
     Args:
         metrics: The metrics collector
@@ -63,56 +96,65 @@ def run_app_loop(
         terminal: Terminal instance for I/O
         on_quit: Optional callback when app exits
     """
-    # Pre-render initial frame
-    term_cols, term_rows = terminal.get_size()
-    row, col = renderer.calculate_terminal_position(term_cols, term_rows)
+    # Queue for input events from the input thread
+    key_queue: Queue[KeyEvent] = Queue()
 
     # Do initial metrics collection
     metrics.update()
-    cached_frame = renderer.render_frame(metrics)
+
+    # Start the input thread
+    input_thread = None
 
     try:
         with terminal:
-            last_metrics_update = time.time()
-            last_render = 0.0
-            needs_render = True
+            # Start input thread after entering raw mode
+            input_thread = InputThread(terminal, key_queue)
+            input_thread.start()
 
-            while True:
-                loop_start = time.time()
+            last_update = 0.0
+            running = True
 
-                # 1. Handle ALL pending input (non-blocking)
-                while True:
-                    key = terminal.read_key(timeout=0.001)
-                    if key is None:
-                        break
-                    if not process_input(key, renderer):
-                        return  # Quit requested
-                    needs_render = True  # Input might change display
-
-                # 2. Update metrics at fixed intervals
+            while running:
                 current_time = time.time()
-                if current_time - last_metrics_update >= METRICS_UPDATE_INTERVAL:
+
+                # Process ALL queued input (non-blocking)
+                while True:
+                    try:
+                        key = key_queue.get_nowait()
+                        if not process_input(key, renderer):
+                            running = False
+                            break
+                    except Empty:
+                        break
+
+                if not running:
+                    break
+
+                # Update metrics and render once per second
+                if current_time - last_update >= UPDATE_INTERVAL:
                     metrics.update()
-                    needs_render = True
-                    last_metrics_update = current_time
 
-                # 3. Render only if needed and enough time has passed
-                if needs_render and (current_time - last_render >= RENDER_INTERVAL):
-                    terminal.move_cursor(row, col)
-                    cached_frame = renderer.render_frame(metrics)
-                    terminal.write(cached_frame)
+                    # Render frame
+                    frame = renderer.render_frame(metrics)
+
+                    # Move cursor to start of output area and draw
+                    terminal.move_cursor_home()
+                    terminal.write(frame)
                     terminal.flush()
-                    last_render = current_time
-                    needs_render = False
 
-                # 4. Small sleep to prevent CPU spinning
-                elapsed = time.time() - loop_start
-                sleep_time = max(0.01, 0.05 - elapsed)  # Target ~20 loops/sec
-                time.sleep(sleep_time)
+                    last_update = current_time
+
+                # Small sleep to prevent CPU spinning while remaining responsive
+                time.sleep(0.02)  # 50 loops/sec for responsive input
 
     except KeyboardInterrupt:
         pass
     finally:
+        # Stop input thread
+        if input_thread is not None:
+            input_thread.stop()
+            input_thread.join(timeout=0.5)
+
         if on_quit:
             on_quit()
 
@@ -137,7 +179,7 @@ def show_startup_message(terminal: Terminal, renderer: MetricsRenderer) -> bool:
     print(f"Current view: {CYAN}{VIEW_TITLES[renderer.current_view]}{RESET}")
     print()
     print(f"Controls:")
-    print(f"  {GREEN}T{RESET}      - Tab between views (Energy/CPU/I-O/Memory/Network)")
+    print(f"  {GREEN}T{RESET}      - Tab between views (Energy/CPU/IO/Memory/Network)")
     print(f"  {GREEN}Q{RESET}      - Quit")
     print()
     print(f"Press {GREEN}SPACE{RESET} to start...")
