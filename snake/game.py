@@ -24,6 +24,7 @@ class GameState:
     height: int
     snake: List[Tuple[int, int]] = field(default_factory=list)
     direction: Direction = Direction.RIGHT
+    next_direction: Direction = Direction.RIGHT  # Queued direction for next tick
     food: Tuple[int, int] = (0, 0)
     score: int = 0
     game_over: bool = False
@@ -53,15 +54,21 @@ class GameState:
             self.food = random.choice(available)
 
     def change_direction(self, new_direction: Direction) -> None:
-        """Change the snake's direction, preventing 180-degree turns."""
+        """Change the snake's direction, preventing 180-degree turns.
+
+        Direction changes are queued and only applied on the next update().
+        This prevents rapid key presses from causing the snake to reverse
+        into itself through a sequence of perpendicular turns.
+        """
         opposite = {
             Direction.UP: Direction.DOWN,
             Direction.DOWN: Direction.UP,
             Direction.LEFT: Direction.RIGHT,
             Direction.RIGHT: Direction.LEFT,
         }
+        # Check against current committed direction to prevent reversal
         if new_direction != opposite.get(self.direction):
-            self.direction = new_direction
+            self.next_direction = new_direction
 
     def update(self) -> bool:
         """
@@ -72,6 +79,9 @@ class GameState:
         """
         if self.game_over:
             return False
+
+        # Apply queued direction change (only one change per tick)
+        self.direction = self.next_direction
 
         # Calculate new head position
         dx, dy = self.direction.value
@@ -111,6 +121,7 @@ class GameState:
             (center_x - 2, center_y),
         ]
         self.direction = Direction.RIGHT
+        self.next_direction = Direction.RIGHT
         self.score = 0
         self.game_over = False
         self._spawn_food()

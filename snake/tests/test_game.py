@@ -83,16 +83,21 @@ class TestDirectionChange:
     """Tests for direction change logic."""
 
     def test_change_direction_valid(self, small_game):
-        """Test valid direction changes."""
+        """Test valid direction changes are queued."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
         small_game.change_direction(Direction.UP)
-        assert small_game.direction == Direction.UP
+        # Direction change is queued in next_direction
+        assert small_game.next_direction == Direction.UP
+        # Actual direction unchanged until update()
+        assert small_game.direction == Direction.RIGHT
 
     def test_change_direction_opposite_blocked(self, small_game):
         """Test that 180-degree turns are blocked."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
         small_game.change_direction(Direction.LEFT)
-        assert small_game.direction == Direction.RIGHT
+        assert small_game.next_direction == Direction.RIGHT
 
     def test_all_opposite_directions_blocked(self):
         """Test all opposite direction pairs are blocked."""
@@ -105,11 +110,12 @@ class TestDirectionChange:
         for current, opposite in opposites:
             game = GameState(width=8, height=8)
             game.direction = current
+            game.next_direction = current
             game.change_direction(opposite)
-            assert game.direction == current
+            assert game.next_direction == current
 
     def test_perpendicular_directions_allowed(self):
-        """Test that perpendicular direction changes are allowed."""
+        """Test that perpendicular direction changes are queued."""
         perpendiculars = [
             (Direction.UP, Direction.LEFT),
             (Direction.UP, Direction.RIGHT),
@@ -123,8 +129,9 @@ class TestDirectionChange:
         for current, new in perpendiculars:
             game = GameState(width=8, height=8)
             game.direction = current
+            game.next_direction = current
             game.change_direction(new)
-            assert game.direction == new
+            assert game.next_direction == new
 
 
 class TestGameUpdate:
@@ -142,6 +149,7 @@ class TestGameUpdate:
         """Test that snake moves up correctly."""
         game = custom_game(snake=[(4, 4), (4, 5), (4, 6)], food=(1, 1))
         game.direction = Direction.UP
+        game.next_direction = Direction.UP
         game.update()
         assert game.snake[0] == (4, 3)
 
@@ -149,6 +157,7 @@ class TestGameUpdate:
         """Test that snake moves down correctly."""
         game = custom_game(snake=[(4, 4), (4, 3), (4, 2)], food=(1, 1))
         game.direction = Direction.DOWN
+        game.next_direction = Direction.DOWN
         game.update()
         assert game.snake[0] == (4, 5)
 
@@ -156,6 +165,7 @@ class TestGameUpdate:
         """Test that snake moves left correctly."""
         game = custom_game(snake=[(4, 4), (5, 4), (6, 4)], food=(1, 1))
         game.direction = Direction.LEFT
+        game.next_direction = Direction.LEFT
         game.update()
         assert game.snake[0] == (3, 4)
 
@@ -163,6 +173,7 @@ class TestGameUpdate:
         """Test that tail follows head during movement."""
         game = custom_game(snake=[(4, 4), (3, 4), (2, 4)], food=(1, 1))
         game.direction = Direction.UP
+        game.next_direction = Direction.UP
         game.update()
         assert game.snake == [(4, 3), (4, 4), (3, 4)]
 
@@ -201,6 +212,7 @@ class TestWallCollision:
         """Test collision with top wall."""
         game = custom_game(snake=[(4, 1), (4, 2), (4, 3)], food=(2, 5))
         game.direction = Direction.UP
+        game.next_direction = Direction.UP
         result = game.update()
         assert result is False
         assert game.game_over is True
@@ -209,6 +221,7 @@ class TestWallCollision:
         """Test collision with bottom wall."""
         game = custom_game(height=8, snake=[(4, 6), (4, 5), (4, 4)], food=(2, 2))
         game.direction = Direction.DOWN
+        game.next_direction = Direction.DOWN
         result = game.update()
         assert result is False
         assert game.game_over is True
@@ -225,6 +238,7 @@ class TestSelfCollision:
             food=(1, 1)
         )
         game.direction = Direction.RIGHT
+        game.next_direction = Direction.RIGHT
         result = game.update()
         assert result is False
         assert game.game_over is True
@@ -233,9 +247,71 @@ class TestSelfCollision:
         """Test no collision when snake moves safely."""
         game = custom_game(snake=[(4, 4), (3, 4), (2, 4)], food=(1, 1))
         game.direction = Direction.UP
+        game.next_direction = Direction.UP
         result = game.update()
         assert result is True
         assert game.game_over is False
+
+    def test_rapid_direction_changes_do_not_cause_collision(self, custom_game):
+        """Test that rapid direction changes don't cause false collisions.
+
+        This tests the bug where pressing arrow keys very quickly could
+        cause the snake to reverse into itself through a sequence of
+        perpendicular turns (e.g., RIGHT -> UP -> LEFT -> DOWN).
+        """
+        # Snake moving right with body extending left
+        game = custom_game(snake=[(4, 4), (3, 4), (2, 4)], food=(1, 1))
+        game.direction = Direction.RIGHT
+        game.next_direction = Direction.RIGHT
+
+        # Simulate rapid key presses: UP, LEFT, DOWN
+        # Without the fix, this could result in moving DOWN into body
+        game.change_direction(Direction.UP)
+        game.change_direction(Direction.LEFT)  # Should be blocked (opposite of RIGHT)
+        game.change_direction(Direction.DOWN)
+
+        # The last valid direction should be DOWN (perpendicular to RIGHT)
+        assert game.next_direction == Direction.DOWN
+
+        # Update should succeed - snake moves down, not into itself
+        result = game.update()
+        assert result is True
+        assert game.game_over is False
+        assert game.snake[0] == (4, 5)  # Moved down
+
+    def test_opposite_direction_blocked_even_after_queued_change(self, custom_game):
+        """Test that opposite direction is always blocked based on current direction."""
+        game = custom_game(snake=[(4, 4), (3, 4), (2, 4)], food=(1, 1))
+        game.direction = Direction.RIGHT
+        game.next_direction = Direction.RIGHT
+
+        # Queue a valid perpendicular direction
+        game.change_direction(Direction.UP)
+        assert game.next_direction == Direction.UP
+
+        # Try to queue the opposite of the CURRENT direction (not next_direction)
+        # LEFT is opposite of RIGHT (current), so should be blocked
+        game.change_direction(Direction.LEFT)
+        # next_direction should still be UP since LEFT was blocked
+        assert game.next_direction == Direction.UP
+
+    def test_only_one_direction_applied_per_tick(self, custom_game):
+        """Test that only one direction change is applied per update tick."""
+        game = custom_game(snake=[(4, 4), (3, 4), (2, 4)], food=(1, 1))
+        game.direction = Direction.RIGHT
+        game.next_direction = Direction.RIGHT
+
+        # Queue UP
+        game.change_direction(Direction.UP)
+
+        # Update applies the queued direction
+        game.update()
+        assert game.direction == Direction.UP
+        assert game.snake[0] == (4, 3)  # Moved up
+
+        # Now DOWN is the opposite of current direction (UP), should be blocked
+        game.change_direction(Direction.DOWN)
+        assert game.next_direction == Direction.UP  # Unchanged
 
 
 class TestFoodCollection:
