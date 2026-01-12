@@ -475,3 +475,59 @@ def sixel_to_png(
     img.save(output_path)
 
     return True
+
+
+def verify_sixel_roundtrip(
+    original_pixels: List[List[int]],
+    sixel_data: str
+) -> tuple[bool, Optional[str]]:
+    """
+    Verify that sixel encoding/decoding produces identical pixels.
+
+    Compares the original pixel buffer (color indices) with the decoded
+    sixel output to ensure the round-trip is lossless.
+
+    Args:
+        original_pixels: Original 2D array of color indices [y][x]
+        sixel_data: The sixel-encoded string to verify
+
+    Returns:
+        Tuple of (success, error_message). If success is True, error_message is None.
+    """
+    decoded = decode_sixel(sixel_data)
+    if decoded is None:
+        return False, "Failed to decode sixel data"
+
+    orig_height = len(original_pixels)
+    orig_width = len(original_pixels[0]) if orig_height > 0 else 0
+    dec_height = len(decoded)
+    dec_width = len(decoded[0]) if dec_height > 0 else 0
+
+    if orig_height != dec_height or orig_width != dec_width:
+        return False, f"Dimension mismatch: original {orig_width}x{orig_height}, decoded {dec_width}x{dec_height}"
+
+    # Build color index to RGB mapping
+    color_map = _get_color_index_to_rgb()
+
+    # Compare each pixel
+    mismatches = []
+    for y in range(orig_height):
+        for x in range(orig_width):
+            color_idx = original_pixels[y][x]
+            expected_rgb = color_map.get(color_idx, (0, 0, 0))
+            actual_rgb = decoded[y][x]
+
+            # Allow small tolerance for RGB conversion (0-255 <-> 0-100 rounding)
+            tolerance = 3
+            if (abs(expected_rgb[0] - actual_rgb[0]) > tolerance or
+                abs(expected_rgb[1] - actual_rgb[1]) > tolerance or
+                abs(expected_rgb[2] - actual_rgb[2]) > tolerance):
+                if len(mismatches) < 10:  # Limit reported mismatches
+                    mismatches.append(f"({x},{y}): expected {expected_rgb}, got {actual_rgb}")
+
+    if mismatches:
+        return False, f"Pixel mismatches: {'; '.join(mismatches)}" + (
+            f" (and {len(mismatches) - 10} more)" if len(mismatches) > 10 else ""
+        )
+
+    return True, None

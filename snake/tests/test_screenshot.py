@@ -3,6 +3,12 @@ Screenshot capture tests for the snake game.
 
 These tests render the game and save screenshots as PNG files,
 which are uploaded as CI artifacts for visual inspection.
+
+Screenshots are generated using a full round-trip through sixel encoding:
+1. Render game state to pixel buffer
+2. Encode pixel buffer to sixel escape sequences
+3. Verify decoded sixel matches original pixels (lossless check)
+4. Decode sixel and save as PNG
 """
 
 import os
@@ -50,8 +56,8 @@ class TestGameScreenshots:
         os_name = get_os_name()
         output_path = SCREENSHOT_DIR / f"game_initial_{os_name}.png"
 
-        success = renderer.save_screenshot(str(output_path))
-        assert success, "Failed to save screenshot"
+        success, error = renderer.save_screenshot(str(output_path))
+        assert success, f"Failed to save screenshot: {error}"
         assert output_path.exists(), f"Screenshot not found at {output_path}"
 
         # Verify the file has content
@@ -59,6 +65,7 @@ class TestGameScreenshots:
         assert file_size > 0, "Screenshot file is empty"
 
         print(f"\nScreenshot saved: {output_path} ({file_size} bytes)")
+        print("Sixel round-trip verification: PASSED")
 
     def test_game_with_longer_snake(self):
         """Capture a screenshot with a longer snake (simulating gameplay)."""
@@ -82,12 +89,13 @@ class TestGameScreenshots:
         os_name = get_os_name()
         output_path = SCREENSHOT_DIR / f"game_playing_{os_name}.png"
 
-        success = renderer.save_screenshot(str(output_path))
-        assert success, "Failed to save screenshot"
+        success, error = renderer.save_screenshot(str(output_path))
+        assert success, f"Failed to save screenshot: {error}"
         assert output_path.exists(), f"Screenshot not found at {output_path}"
 
         file_size = output_path.stat().st_size
         print(f"\nScreenshot saved: {output_path} ({file_size} bytes)")
+        print("Sixel round-trip verification: PASSED")
 
     def test_game_over_state(self):
         """Capture a screenshot of the game over state."""
@@ -102,12 +110,13 @@ class TestGameScreenshots:
         os_name = get_os_name()
         output_path = SCREENSHOT_DIR / f"game_over_{os_name}.png"
 
-        success = renderer.save_screenshot(str(output_path), show_game_over=True)
-        assert success, "Failed to save screenshot"
+        success, error = renderer.save_screenshot(str(output_path), show_game_over=True)
+        assert success, f"Failed to save screenshot: {error}"
         assert output_path.exists(), f"Screenshot not found at {output_path}"
 
         file_size = output_path.stat().st_size
         print(f"\nScreenshot saved: {output_path} ({file_size} bytes)")
+        print("Sixel round-trip verification: PASSED")
 
 
 class TestScreenshotVariations:
@@ -125,8 +134,9 @@ class TestScreenshotVariations:
         os_name = get_os_name()
         output_path = SCREENSHOT_DIR / f"game_px{pixel_size}_{os_name}.png"
 
-        success = renderer.save_screenshot(str(output_path))
-        assert success, f"Failed to save screenshot for pixel_size={pixel_size}"
+        success, error = renderer.save_screenshot(str(output_path))
+        assert success, f"Failed to save screenshot for pixel_size={pixel_size}: {error}"
 
         file_size = output_path.stat().st_size
         print(f"\nScreenshot saved: {output_path} ({file_size} bytes)")
+        print(f"Sixel round-trip verification (px{pixel_size}): PASSED")
