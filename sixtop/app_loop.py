@@ -11,7 +11,7 @@ import sys
 import time
 import threading
 from queue import Queue, Empty
-from typing import Optional, Callable
+from typing import Optional, Callable, Tuple
 
 from metrics import MetricsCollector
 from renderer import MetricsRenderer, MetricView, VIEW_TITLES
@@ -19,7 +19,7 @@ from terminals import Terminal, KeyEvent
 
 
 # Update interval
-UPDATE_INTERVAL = 1.0  # Update and render once per second
+UPDATE_INTERVAL = 1.0  # Update metrics once per second
 
 # ANSI escape codes
 SAVE_CURSOR = "\x1b[s"
@@ -56,7 +56,7 @@ class InputThread(threading.Thread):
         self.running = False
 
 
-def process_input(key: Optional[KeyEvent], renderer: MetricsRenderer) -> bool:
+def process_input(key: Optional[KeyEvent], renderer: MetricsRenderer) -> Tuple[bool, bool]:
     """
     Process a key event and update application state.
 
@@ -65,21 +65,21 @@ def process_input(key: Optional[KeyEvent], renderer: MetricsRenderer) -> bool:
         renderer: The renderer to update view on
 
     Returns:
-        False if the app should quit, True otherwise
+        Tuple of (should_continue, needs_render)
     """
     if key is None:
-        return True
+        return True, False
 
     # Check for quit
     if key.is_quit:
-        return False
+        return False, False
 
     # Check for tab (t) to switch views
     if key.key_type.value == 'character' and key.value.lower() == 't':
         renderer.next_view()
-        return True
+        return True, True  # Need to re-render immediately
 
-    return True
+    return True, False
 
 
 def run_app_loop(
@@ -92,8 +92,8 @@ def run_app_loop(
     Run the main application loop.
 
     Uses a separate thread for input handling to ensure responsiveness
-    even during rendering. Renders once per second at the current
-    cursor position.
+    even during rendering. Renders immediately on view changes and
+    updates metrics once per second.
 
     Args:
         metrics: The metrics collector
@@ -110,6 +110,14 @@ def run_app_loop(
     # Track if we've collected stats yet
     stats_ready = False
 
+    def render_frame():
+        """Helper to render and display a frame."""
+        frame = renderer.render_frame(metrics, stats_ready=stats_ready)
+        terminal.write(RESTORE_CURSOR)
+        terminal.write(SAVE_CURSOR)
+        terminal.write(frame)
+        terminal.flush()
+
     try:
         with terminal:
             # Save cursor position for redrawing in place
@@ -121,49 +129,44 @@ def run_app_loop(
             input_thread.start()
 
             # Render initial frame immediately with stats_ready=False
-            frame = renderer.render_frame(metrics, stats_ready=False)
-            terminal.write(RESTORE_CURSOR)
-            terminal.write(SAVE_CURSOR)
-            terminal.write(frame)
-            terminal.flush()
+            render_frame()
 
             last_update = time.time()
             running = True
 
             while running:
                 current_time = time.time()
+                needs_render = False
 
                 # Process ALL queued input (non-blocking)
                 while True:
                     try:
                         key = key_queue.get_nowait()
-                        if not process_input(key, renderer):
+                        should_continue, key_needs_render = process_input(key, renderer)
+                        if not should_continue:
                             running = False
                             break
+                        if key_needs_render:
+                            needs_render = True
                     except Empty:
                         break
 
                 if not running:
                     break
 
-                # Update metrics and render once per second
+                # Render immediately if input changed the view
+                if needs_render:
+                    render_frame()
+
+                # Update metrics once per second
                 if current_time - last_update >= UPDATE_INTERVAL:
                     metrics.update()
                     stats_ready = True
-
-                    # Render frame
-                    frame = renderer.render_frame(metrics, stats_ready=stats_ready)
-
-                    # Restore to saved position and redraw
-                    terminal.write(RESTORE_CURSOR)
-                    terminal.write(SAVE_CURSOR)
-                    terminal.write(frame)
-                    terminal.flush()
-
+                    render_frame()
                     last_update = current_time
 
                 # Small sleep to prevent CPU spinning while remaining responsive
-                time.sleep(0.02)  # 50 loops/sec for responsive input
+                time.sleep(0.01)  # 100 loops/sec for very responsive input
 
     except KeyboardInterrupt:
         pass
