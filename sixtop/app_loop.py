@@ -24,12 +24,6 @@ UPDATE_INTERVAL = 1.0  # Update metrics once per second
 # ANSI escape codes
 SAVE_CURSOR = "\x1b[s"
 RESTORE_CURSOR = "\x1b[u"
-GREEN = "\x1b[32m"
-RESET = "\x1b[0m"
-CLEAR_LINE = "\x1b[2K"
-
-# Instructions line
-INSTRUCTIONS = f"{GREEN}T{RESET}=tab views  {GREEN}Q{RESET}=quit"
 
 
 class InputThread(threading.Thread):
@@ -121,8 +115,8 @@ def run_app_loop(
         frame = renderer.render_frame(metrics, stats_ready=stats_ready)
         terminal.write(RESTORE_CURSOR)
         terminal.write(SAVE_CURSOR)
-        # Print instructions line then the sixel frame
-        terminal.write(CLEAR_LINE + INSTRUCTIONS + "\n")
+        # Add top margin (newline) then the sixel frame
+        terminal.write("\n")
         terminal.write(frame)
         terminal.flush()
 

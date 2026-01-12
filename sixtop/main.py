@@ -26,7 +26,7 @@ from terminals import create_terminal
 
 # Display settings
 FRAME_WIDTH = 580
-FRAME_HEIGHT = 108  # Compact height (40% shorter)
+FRAME_HEIGHT = 120  # Includes instruction bar at top
 
 
 def main() -> None:
