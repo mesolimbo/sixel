@@ -10,6 +10,7 @@ from typing import Optional
 from sixel import (
     pixels_to_sixel,
     sixel_to_png,
+    verify_sixel_roundtrip,
     create_pixel_buffer,
     fill_rect,
     draw_text,
@@ -228,8 +229,9 @@ class GameRenderer:
     def save_screenshot(
         self,
         output_path: str,
-        show_game_over: bool = False
-    ) -> bool:
+        show_game_over: bool = False,
+        verify: bool = True
+    ) -> tuple[bool, Optional[str]]:
         """
         Save a screenshot of the current game state as a PNG.
 
@@ -240,12 +242,39 @@ class GameRenderer:
         Args:
             output_path: Path to save the PNG file
             show_game_over: Whether to display game over text
+            verify: If True, verify the sixel round-trip matches original pixels
 
         Returns:
-            True if screenshot was saved successfully, False otherwise
+            Tuple of (success, error_message). If success is True, error_message is None.
         """
-        # Generate the actual sixel output (what would be sent to terminal)
-        sixel_output = self.render_frame(show_game_over=show_game_over)
+        # Build the original pixel buffer
+        pixels = create_pixel_buffer(
+            self.frame_width,
+            self.frame_height,
+            COLOR_INDICES["background"]
+        )
 
-        # Decode the sixel back to pixels and save as PNG
-        return sixel_to_png(sixel_output, output_path)
+        self._draw_frame_border(pixels)
+        self._draw_title(pixels)
+        self._draw_game_border(pixels)
+        self._draw_food(pixels)
+        self._draw_snake(pixels)
+        self._draw_score(pixels)
+
+        if show_game_over:
+            self._draw_game_over(pixels)
+
+        # Encode to sixel (what would be sent to terminal)
+        sixel_output = pixels_to_sixel(pixels, self.frame_width, self.frame_height)
+
+        # Verify the round-trip if requested
+        if verify:
+            success, error = verify_sixel_roundtrip(pixels, sixel_output)
+            if not success:
+                return False, f"Sixel round-trip verification failed: {error}"
+
+        # Decode sixel and save as PNG
+        if not sixel_to_png(sixel_output, output_path):
+            return False, "Failed to save PNG"
+
+        return True, None
