@@ -21,6 +21,10 @@ from terminals import Terminal, KeyEvent
 # Update interval
 UPDATE_INTERVAL = 1.0  # Update and render once per second
 
+# ANSI escape codes
+SAVE_CURSOR = "\x1b[s"
+RESTORE_CURSOR = "\x1b[u"
+
 
 class InputThread(threading.Thread):
     """
@@ -88,7 +92,8 @@ def run_app_loop(
     Run the main application loop.
 
     Uses a separate thread for input handling to ensure responsiveness
-    even during rendering. Renders once per second.
+    even during rendering. Renders once per second at the current
+    cursor position.
 
     Args:
         metrics: The metrics collector
@@ -99,19 +104,30 @@ def run_app_loop(
     # Queue for input events from the input thread
     key_queue: Queue[KeyEvent] = Queue()
 
-    # Do initial metrics collection
-    metrics.update()
-
     # Start the input thread
     input_thread = None
 
+    # Track if we've collected stats yet
+    stats_ready = False
+
     try:
         with terminal:
+            # Save cursor position for redrawing in place
+            terminal.write(SAVE_CURSOR)
+            terminal.flush()
+
             # Start input thread after entering raw mode
             input_thread = InputThread(terminal, key_queue)
             input_thread.start()
 
-            last_update = 0.0
+            # Render initial frame immediately with stats_ready=False
+            frame = renderer.render_frame(metrics, stats_ready=False)
+            terminal.write(RESTORE_CURSOR)
+            terminal.write(SAVE_CURSOR)
+            terminal.write(frame)
+            terminal.flush()
+
+            last_update = time.time()
             running = True
 
             while running:
@@ -133,12 +149,14 @@ def run_app_loop(
                 # Update metrics and render once per second
                 if current_time - last_update >= UPDATE_INTERVAL:
                     metrics.update()
+                    stats_ready = True
 
                     # Render frame
-                    frame = renderer.render_frame(metrics)
+                    frame = renderer.render_frame(metrics, stats_ready=stats_ready)
 
-                    # Move cursor to start of output area and draw
-                    terminal.move_cursor_home()
+                    # Restore to saved position and redraw
+                    terminal.write(RESTORE_CURSOR)
+                    terminal.write(SAVE_CURSOR)
                     terminal.write(frame)
                     terminal.flush()
 
@@ -157,48 +175,3 @@ def run_app_loop(
 
         if on_quit:
             on_quit()
-
-
-def show_startup_message(terminal: Terminal, renderer: MetricsRenderer) -> bool:
-    """
-    Show startup message and wait for user to press space.
-
-    Args:
-        terminal: Terminal instance
-        renderer: Renderer to show current view
-
-    Returns:
-        True if user pressed space to start, False if quit
-    """
-    # ANSI colors
-    CYAN = "\x1b[36m"
-    GREEN = "\x1b[32m"
-    RESET = "\x1b[0m"
-
-    print("Sixtop - System Monitor with Sixel Graphics")
-    print(f"Current view: {CYAN}{VIEW_TITLES[renderer.current_view]}{RESET}")
-    print()
-    print(f"Controls:")
-    print(f"  {GREEN}T{RESET}      - Tab between views (Energy/CPU/IO/Memory/Network)")
-    print(f"  {GREEN}Q{RESET}      - Quit")
-    print()
-    print(f"Press {GREEN}SPACE{RESET} to start...")
-
-    try:
-        terminal.enter_raw_mode()
-        while True:
-            key = terminal.read_key(timeout=0.1)
-            if key is None:
-                continue
-
-            if key.is_quit:
-                return False
-
-            if key.key_type.value == 'character':
-                if key.value == ' ':
-                    return True
-                if key.value.lower() == 'q':
-                    return False
-
-    finally:
-        terminal.exit_raw_mode()

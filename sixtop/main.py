@@ -18,7 +18,7 @@ Requirements:
 
 import sys
 
-from app_loop import run_app_loop, show_startup_message
+from app_loop import run_app_loop
 from metrics import MetricsCollector
 from renderer import MetricsRenderer, MetricView
 from terminals import create_terminal
@@ -48,16 +48,8 @@ def main() -> None:
     # Start with CPU view
     renderer.current_view = MetricView.CPU
 
-    # Show startup message and wait for space
-    if not show_startup_message(terminal, renderer):
-        print("Goodbye!")
-        return
-
-    # Run the main loop
+    # Run the main loop (starts immediately)
     run_app_loop(metrics, renderer, terminal)
-
-    # Final message
-    print("\nSixtop exited. Thanks for using!")
 
 
 if __name__ == "__main__":
