@@ -52,7 +52,7 @@ class MetricsRenderer:
     real-time updating graphs.
     """
 
-    def __init__(self, width: int = 580, height: int = 108, scale: int = 1):
+    def __init__(self, width: int = 580, height: int = 120, scale: int = 1):
         """
         Initialize the renderer.
 
@@ -71,20 +71,25 @@ class MetricsRenderer:
         self.panel_padding = 4
         self.row_height = 11  # Compact row spacing
         self.corner_radius = 6  # Rounded corner radius
+        self.instruction_height = 12  # Height for instruction bar at top
 
         # Three-column layout
         self.left_panel_width = (width - 4 * self.padding) // 3
         self.center_panel_width = self.left_panel_width
         self.right_panel_width = self.left_panel_width
 
-        # Panel positions
+        # Panel positions (offset down for instruction bar)
+        self.panel_top = self.padding + self.instruction_height
         self.left_x = self.padding
         self.center_x = self.left_x + self.left_panel_width + self.padding
         self.right_x = self.center_x + self.center_panel_width + self.padding
 
+        # Panel height (excluding instruction bar area)
+        self.panel_height = height - self.panel_top - self.padding
+
         # Graph area - adjusted for compact height
-        self.graph_y = 22
-        self.graph_height = height - 32
+        self.graph_y = self.panel_top + 17
+        self.graph_height = self.panel_height - 27
 
         # Current view
         self.current_view = MetricView.CPU
@@ -114,8 +119,11 @@ class MetricsRenderer:
             COLOR_INDICES["background"]
         )
 
-        # Draw frame border
+        # Draw frame border (green)
         self._draw_frame_border(pixels)
+
+        # Draw instructions at top
+        self._draw_instructions(pixels)
 
         # Render the appropriate view
         if self.current_view == MetricView.ENERGY:
@@ -132,12 +140,31 @@ class MetricsRenderer:
         return pixels_to_sixel(pixels, self.width, self.height)
 
     def _draw_frame_border(self, pixels: List[List[int]]) -> None:
-        """Draw the outer frame border with rounded corners."""
-        color = COLOR_INDICES["border"]
+        """Draw the outer frame border with rounded corners (green)."""
+        color = COLOR_INDICES["text_green"]
         draw_rounded_rect_border(
             pixels, 0, 0, self.width, self.height,
             self.corner_radius, color, "tltrblbr"
         )
+
+    def _draw_instructions(self, pixels: List[List[int]]) -> None:
+        """Draw the instruction text at the top of the frame."""
+        # Draw "T=tab views  Q=quit" with green highlighting for keys
+        y = self.padding + 2
+        x = self.padding + 4
+
+        # T (green)
+        draw_text(pixels, x, y, "T", COLOR_INDICES["text_green"], self.scale)
+        x += get_text_width("T", self.scale) + 2
+        # =tab views (gray)
+        draw_text(pixels, x, y, "=TAB VIEWS", COLOR_INDICES["text_dim"], self.scale)
+        x += get_text_width("=TAB VIEWS", self.scale) + 12
+
+        # Q (green)
+        draw_text(pixels, x, y, "Q", COLOR_INDICES["text_green"], self.scale)
+        x += get_text_width("Q", self.scale) + 2
+        # =quit (gray)
+        draw_text(pixels, x, y, "=QUIT", COLOR_INDICES["text_dim"], self.scale)
 
     def _draw_panel_border(
         self,
@@ -238,11 +265,11 @@ class MetricsRenderer:
         row = self.row_height
 
         # Left panel: Energy Impact graph
-        self._draw_panel_border(pixels, self.left_x, self.padding,
-                               self.left_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.left_x, self.panel_top,
+                               self.left_panel_width, self.panel_height,
                                corners="tlbl")
         self._draw_title(pixels, self.left_x + self.panel_padding,
-                        self.padding + self.panel_padding,
+                        self.panel_top + self.panel_padding,
                         self.left_panel_width - 2 * self.panel_padding,
                         "ENERGY IMPACT")
 
@@ -257,7 +284,7 @@ class MetricsRenderer:
         )
 
         # Center panel: Battery stats
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
 
         if ready and metrics.battery.has_battery:
             charge_str = f"{metrics.battery.charge_percent:.0f}%"
@@ -284,11 +311,11 @@ class MetricsRenderer:
                            stat_y, "ON BATTERY:", time_on_str)
 
         # Right panel: Battery level visualization
-        self._draw_panel_border(pixels, self.right_x, self.padding,
-                               self.right_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.right_x, self.panel_top,
+                               self.right_panel_width, self.panel_height,
                                highlight=True, corners="trbr")
         self._draw_title(pixels, self.right_x + self.panel_padding,
-                        self.padding + self.panel_padding,
+                        self.panel_top + self.panel_padding,
                         self.right_panel_width - 2 * self.panel_padding,
                         "BATTERY")
 
@@ -302,11 +329,11 @@ class MetricsRenderer:
         row = self.row_height
 
         # Left panel: CPU stats
-        self._draw_panel_border(pixels, self.left_x, self.padding,
-                               self.left_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.left_x, self.panel_top,
+                               self.left_panel_width, self.panel_height,
                                corners="tlbl")
 
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
         self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
                            stat_y, "SYSTEM:", self._fmt(metrics.cpu.system_percent, ".2f", ready, "%"))
 
@@ -320,10 +347,10 @@ class MetricsRenderer:
                            COLOR_INDICES["text"])
 
         # Center panel: CPU Load graph
-        self._draw_panel_border(pixels, self.center_x, self.padding,
-                               self.center_panel_width, self.height - 2 * self.padding)
+        self._draw_panel_border(pixels, self.center_x, self.panel_top,
+                               self.center_panel_width, self.panel_height)
         self._draw_title(pixels, self.center_x + self.panel_padding,
-                        self.padding + self.panel_padding,
+                        self.panel_top + self.panel_padding,
                         self.center_panel_width - 2 * self.panel_padding,
                         "CPU LOAD")
 
@@ -341,11 +368,11 @@ class MetricsRenderer:
         )
 
         # Right panel: Thread/Process counts
-        self._draw_panel_border(pixels, self.right_x, self.padding,
-                               self.right_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.right_x, self.panel_top,
+                               self.right_panel_width, self.panel_height,
                                corners="trbr")
 
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
         self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
                            stat_y, "THREADS:", self._fmt_int(metrics.cpu.thread_count, ready))
 
@@ -363,11 +390,11 @@ class MetricsRenderer:
         row = self.row_height
 
         # Left panel: Read stats
-        self._draw_panel_border(pixels, self.left_x, self.padding,
-                               self.left_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.left_x, self.panel_top,
+                               self.left_panel_width, self.panel_height,
                                corners="tlbl")
 
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
         self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
                            stat_y, "READS:", self._fmt_int(metrics.disk.reads_total, ready))
 
@@ -385,10 +412,10 @@ class MetricsRenderer:
                            COLOR_INDICES["text_red"])
 
         # Center panel: I/O graph
-        self._draw_panel_border(pixels, self.center_x, self.padding,
-                               self.center_panel_width, self.height - 2 * self.padding)
+        self._draw_panel_border(pixels, self.center_x, self.panel_top,
+                               self.center_panel_width, self.panel_height)
         self._draw_title(pixels, self.center_x + self.panel_padding,
-                        self.padding + self.panel_padding,
+                        self.panel_top + self.panel_padding,
                         self.center_panel_width - 2 * self.panel_padding,
                         "IO")
 
@@ -405,11 +432,11 @@ class MetricsRenderer:
         )
 
         # Right panel: Data read/written
-        self._draw_panel_border(pixels, self.right_x, self.padding,
-                               self.right_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.right_x, self.panel_top,
+                               self.right_panel_width, self.panel_height,
                                corners="trbr")
 
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
         self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
                            stat_y, "READ:", self._fmt(metrics.disk.data_read_gb, ".1f", ready, " GB"))
 
@@ -435,17 +462,17 @@ class MetricsRenderer:
         row = self.row_height
 
         # Left panel: Memory pressure bar
-        self._draw_panel_border(pixels, self.left_x, self.padding,
-                               self.left_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.left_x, self.panel_top,
+                               self.left_panel_width, self.panel_height,
                                corners="tlbl")
         self._draw_title(pixels, self.left_x + self.panel_padding,
-                        self.padding + self.panel_padding,
+                        self.panel_top + self.panel_padding,
                         self.left_panel_width - 2 * self.panel_padding,
                         "MEMORY PRESSURE")
 
         # Draw pressure bar
         bar_x = self.left_x + self.panel_padding
-        bar_y = self.height - self.padding - 25
+        bar_y = self.panel_top + self.panel_height - 25
         bar_width = self.left_panel_width - 2 * self.panel_padding
         bar_height = 15
 
@@ -460,7 +487,7 @@ class MetricsRenderer:
             )
 
         # Center panel: Memory stats
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
         self._draw_stat_row(pixels, self.center_x, self.center_panel_width,
                            stat_y, "PHYSICAL:", self._fmt(metrics.memory.physical_total_gb, ".2f", ready, " GB"))
 
@@ -477,11 +504,11 @@ class MetricsRenderer:
                            stat_y, "SWAP:", self._fmt(metrics.memory.swap_used_gb, ".2f", ready, " GB"))
 
         # Right panel: App/System memory breakdown
-        self._draw_panel_border(pixels, self.right_x, self.padding,
-                               self.right_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.right_x, self.panel_top,
+                               self.right_panel_width, self.panel_height,
                                corners="trbr")
 
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
         self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
                            stat_y, "APP:", self._fmt(metrics.memory.app_memory_gb, ".2f", ready, " GB"))
 
@@ -503,11 +530,11 @@ class MetricsRenderer:
         row = self.row_height
 
         # Left panel: Packet counts
-        self._draw_panel_border(pixels, self.left_x, self.padding,
-                               self.left_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.left_x, self.panel_top,
+                               self.left_panel_width, self.panel_height,
                                corners="tlbl")
 
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
         self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
                            stat_y, "PKT IN:", self._fmt_int(metrics.network.packets_in_total, ready))
 
@@ -525,10 +552,10 @@ class MetricsRenderer:
                            COLOR_INDICES["text_red"])
 
         # Center panel: Network graph
-        self._draw_panel_border(pixels, self.center_x, self.padding,
-                               self.center_panel_width, self.height - 2 * self.padding)
+        self._draw_panel_border(pixels, self.center_x, self.panel_top,
+                               self.center_panel_width, self.panel_height)
         self._draw_title(pixels, self.center_x + self.panel_padding,
-                        self.padding + self.panel_padding,
+                        self.panel_top + self.panel_padding,
                         self.center_panel_width - 2 * self.panel_padding,
                         "PACKETS")
 
@@ -545,11 +572,11 @@ class MetricsRenderer:
         )
 
         # Right panel: Data sent/received
-        self._draw_panel_border(pixels, self.right_x, self.padding,
-                               self.right_panel_width, self.height - 2 * self.padding,
+        self._draw_panel_border(pixels, self.right_x, self.panel_top,
+                               self.right_panel_width, self.panel_height,
                                corners="trbr")
 
-        stat_y = self.padding + self.panel_padding
+        stat_y = self.panel_top + self.panel_padding
         self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
                            stat_y, "RECV:", self._fmt(metrics.network.data_received_gb, ".2f", ready, " GB"))
 
