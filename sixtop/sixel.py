@@ -416,7 +416,8 @@ def draw_text(
     x: int, y: int,
     text: str,
     color_idx: int,
-    scale: int = 1
+    scale: int = 1,
+    bold: bool = False
 ) -> int:
     """
     Draw text onto the pixel buffer using the bitmap font.
@@ -427,11 +428,13 @@ def draw_text(
         text: Text to draw
         color_idx: Color index to use
         scale: Scale factor (1 = 5x7, 2 = 10x14, etc.)
+        bold: If True, draw each pixel with extra width for bolder text
 
     Returns:
         Width of the rendered text in pixels
     """
     cursor_x = x
+    extra_width = 1 if bold else 0
     for char in text.upper():
         if char in FONT:
             glyph = FONT[char]
@@ -439,22 +442,23 @@ def draw_text(
                 for col_idx in range(FONT_WIDTH):
                     if row_bits & (1 << (FONT_WIDTH - 1 - col_idx)):
                         for sy in range(scale):
-                            for sx in range(scale):
+                            for sx in range(scale + extra_width):
                                 set_pixel(
                                     pixels,
                                     cursor_x + col_idx * scale + sx,
                                     y + row_idx * scale + sy,
                                     color_idx
                                 )
-            cursor_x += (FONT_WIDTH + 1) * scale
+            cursor_x += (FONT_WIDTH + 1) * scale + extra_width
         else:
             cursor_x += (FONT_WIDTH + 1) * scale
     return cursor_x - x
 
 
-def get_text_width(text: str, scale: int = 1) -> int:
+def get_text_width(text: str, scale: int = 1, bold: bool = False) -> int:
     """Get the width of text in pixels."""
-    return len(text) * (FONT_WIDTH + 1) * scale - scale
+    extra_width = 1 if bold else 0
+    return len(text) * ((FONT_WIDTH + 1) * scale + extra_width) - scale - extra_width
 
 
 def _encode_rle(sixel_chars: List[int]) -> str:
