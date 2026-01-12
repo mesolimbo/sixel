@@ -246,15 +246,15 @@ class Terminal(ABC):
         self.flush()
 
     def __enter__(self) -> "Terminal":
-        """Context manager entry - enters raw mode and alternate screen."""
+        """Context manager entry - enters raw mode (stays in current screen)."""
         self.enter_raw_mode()
-        self.enter_alternate_screen()
         self.hide_cursor()
-        self.clear_screen()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager exit - restores terminal state."""
         self.show_cursor()
-        self.exit_alternate_screen()
         self.exit_raw_mode()
+        # Print newline to move past the sixel output
+        self.write("\n")
+        self.flush()
