@@ -73,37 +73,42 @@ class TestDirectionKeyProcessing:
     def test_process_wasd_up(self, small_game):
         """Test processing 'w' for up direction."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
         key = KeyEvent.character('w')
         process_input(key, small_game)
-        assert small_game.direction == Direction.UP
+        assert small_game.next_direction == Direction.UP
 
     def test_process_wasd_down(self, small_game):
         """Test processing 's' for down direction."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
         key = KeyEvent.character('s')
         process_input(key, small_game)
-        assert small_game.direction == Direction.DOWN
+        assert small_game.next_direction == Direction.DOWN
 
     def test_process_wasd_left(self, small_game):
         """Test processing 'a' for left direction."""
         small_game.direction = Direction.UP
+        small_game.next_direction = Direction.UP
         key = KeyEvent.character('a')
         process_input(key, small_game)
-        assert small_game.direction == Direction.LEFT
+        assert small_game.next_direction == Direction.LEFT
 
     def test_process_wasd_right(self, small_game):
         """Test processing 'd' for right direction."""
         small_game.direction = Direction.UP
+        small_game.next_direction = Direction.UP
         key = KeyEvent.character('d')
         process_input(key, small_game)
-        assert small_game.direction == Direction.RIGHT
+        assert small_game.next_direction == Direction.RIGHT
 
     def test_process_wasd_uppercase(self, small_game):
         """Test processing uppercase WASD keys."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
         key = KeyEvent.character('W')
         process_input(key, small_game)
-        assert small_game.direction == Direction.UP
+        assert small_game.next_direction == Direction.UP
 
 
 class TestArrowKeyProcessing:
@@ -112,37 +117,42 @@ class TestArrowKeyProcessing:
     def test_process_arrow_up(self, small_game):
         """Test processing up arrow."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
         key = KeyEvent.arrow('up')
         process_input(key, small_game)
-        assert small_game.direction == Direction.UP
+        assert small_game.next_direction == Direction.UP
 
     def test_process_arrow_down(self, small_game):
         """Test processing down arrow."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
         key = KeyEvent.arrow('down')
         process_input(key, small_game)
-        assert small_game.direction == Direction.DOWN
+        assert small_game.next_direction == Direction.DOWN
 
     def test_process_arrow_left(self, small_game):
         """Test processing left arrow."""
         small_game.direction = Direction.UP
+        small_game.next_direction = Direction.UP
         key = KeyEvent.arrow('left')
         process_input(key, small_game)
-        assert small_game.direction == Direction.LEFT
+        assert small_game.next_direction == Direction.LEFT
 
     def test_process_arrow_right(self, small_game):
         """Test processing right arrow."""
         small_game.direction = Direction.UP
+        small_game.next_direction = Direction.UP
         key = KeyEvent.arrow('right')
         process_input(key, small_game)
-        assert small_game.direction == Direction.RIGHT
+        assert small_game.next_direction == Direction.RIGHT
 
     def test_process_arrow_uppercase(self, small_game):
         """Test processing uppercase arrow direction."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
         key = KeyEvent.arrow('UP')
         process_input(key, small_game)
-        assert small_game.direction == Direction.UP
+        assert small_game.next_direction == Direction.UP
 
 
 class TestUnknownKeyProcessing:
@@ -245,36 +255,35 @@ class TestInputSequences:
     """Tests for sequences of input processing."""
 
     def test_multiple_direction_changes(self, small_game):
-        """Test processing multiple direction changes."""
+        """Test processing multiple direction changes between ticks.
+
+        With the queued direction system, only the last valid direction
+        is kept in next_direction until update() is called.
+        """
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
 
-        # Change to up
+        # Change to up - queued
         process_input(KeyEvent.character('w'), small_game)
-        assert small_game.direction == Direction.UP
+        assert small_game.next_direction == Direction.UP
 
-        # Change to left
-        process_input(KeyEvent.character('a'), small_game)
-        assert small_game.direction == Direction.LEFT
-
-        # Change to down
+        # Change to down - also allowed (perpendicular to RIGHT)
+        # This replaces the previous queued direction
         process_input(KeyEvent.character('s'), small_game)
-        assert small_game.direction == Direction.DOWN
+        assert small_game.next_direction == Direction.DOWN
 
     def test_direction_change_respects_game_rules(self, small_game):
         """Test that direction changes respect 180-degree rule."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
 
         # Try to go left (opposite) - should be blocked
         process_input(KeyEvent.character('a'), small_game)
-        assert small_game.direction == Direction.RIGHT
+        assert small_game.next_direction == Direction.RIGHT
 
-        # Go up first
+        # Go up - should be allowed (perpendicular to current direction)
         process_input(KeyEvent.character('w'), small_game)
-        assert small_game.direction == Direction.UP
-
-        # Now can go left
-        process_input(KeyEvent.character('a'), small_game)
-        assert small_game.direction == Direction.LEFT
+        assert small_game.next_direction == Direction.UP
 
     def test_restart_during_game(self, small_game):
         """Test restart key during active game."""
@@ -288,15 +297,16 @@ class TestInputSequences:
     def test_mixed_input_types(self, small_game):
         """Test mixing different input types."""
         small_game.direction = Direction.RIGHT
+        small_game.next_direction = Direction.RIGHT
 
-        # Arrow key
+        # Arrow key - queued
         process_input(KeyEvent.arrow('up'), small_game)
-        assert small_game.direction == Direction.UP
+        assert small_game.next_direction == Direction.UP
 
-        # WASD key
+        # Left is blocked (opposite of current direction RIGHT)
         process_input(KeyEvent.character('a'), small_game)
-        assert small_game.direction == Direction.LEFT
+        assert small_game.next_direction == Direction.UP
 
         # Unknown key (should not change direction)
         process_input(KeyEvent.character('x'), small_game)
-        assert small_game.direction == Direction.LEFT
+        assert small_game.next_direction == Direction.UP
