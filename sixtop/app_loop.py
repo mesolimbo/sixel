@@ -118,16 +118,20 @@ def run_app_loop(
     def render_frame():
         """Helper to render and display a frame."""
         frame = renderer.render_frame(metrics, stats_ready=stats_ready)
-        # Move cursor up to start position, then render
-        terminal.write(MOVE_UP.format(sixel_rows))
+        # Restore to saved position, render, then save again
+        terminal.write(RESTORE_CURSOR)
         terminal.write("\n")  # Top margin
         terminal.write(frame)
         terminal.flush()
 
     try:
         with terminal:
-            # Reserve space by printing blank lines, then move cursor back up
+            # Reserve space by printing blank lines
             terminal.write("\n" * sixel_rows)
+            # Move back up to create render area
+            terminal.write(MOVE_UP.format(sixel_rows))
+            # Save this position as our anchor point
+            terminal.write(SAVE_CURSOR)
             terminal.flush()
 
             # Start input thread after entering raw mode

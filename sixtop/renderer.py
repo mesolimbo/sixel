@@ -52,7 +52,7 @@ class MetricsRenderer:
     real-time updating graphs.
     """
 
-    def __init__(self, width: int = 580, height: int = 120, scale: int = 1):
+    def __init__(self, width: int = 580, height: int = 84, scale: int = 1):
         """
         Initialize the renderer.
 
@@ -65,13 +65,13 @@ class MetricsRenderer:
         self.height = height
         self.scale = scale
 
-        # Layout constants - compact spacing
-        self.padding = 5
+        # Layout constants - tight spacing
+        self.padding = 4
         self.border_width = 1
-        self.panel_padding = 4
-        self.row_height = 11  # Compact row spacing
-        self.corner_radius = 6  # Rounded corner radius
-        self.instruction_height = 12  # Height for instruction bar at top
+        self.panel_padding = 3
+        self.row_height = 10  # Tight row spacing
+        self.corner_radius = 5  # Rounded corner radius
+        self.instruction_height = 10  # Height for instruction bar at top
 
         # Three-column layout
         self.left_panel_width = (width - 4 * self.padding) // 3
@@ -87,9 +87,12 @@ class MetricsRenderer:
         # Panel height (excluding instruction bar area)
         self.panel_height = height - self.panel_top - self.padding
 
-        # Graph area - adjusted for compact height
-        self.graph_y = self.panel_top + 17
-        self.graph_height = self.panel_height - 27
+        # Graph area - tight layout
+        self.graph_y = self.panel_top + 14
+        self.graph_height = self.panel_height - 18
+
+        # Text rendering - bold for better visibility
+        self.bold = True
 
         # Current view
         self.current_view = MetricView.CPU
@@ -150,21 +153,21 @@ class MetricsRenderer:
     def _draw_instructions(self, pixels: List[List[int]]) -> None:
         """Draw the instruction text at the top of the frame."""
         # Draw "T=tab views  Q=quit" with green highlighting for keys
-        y = self.padding + 2
+        y = self.padding + 1
         x = self.padding + 4
 
         # T (green)
-        draw_text(pixels, x, y, "T", COLOR_INDICES["text_green"], self.scale)
-        x += get_text_width("T", self.scale) + 2
+        draw_text(pixels, x, y, "T", COLOR_INDICES["text_green"], self.scale, self.bold)
+        x += get_text_width("T", self.scale, self.bold) + 2
         # =tab views (gray)
-        draw_text(pixels, x, y, "=TAB VIEWS", COLOR_INDICES["text_dim"], self.scale)
-        x += get_text_width("=TAB VIEWS", self.scale) + 12
+        draw_text(pixels, x, y, "=TAB VIEWS", COLOR_INDICES["text_dim"], self.scale, self.bold)
+        x += get_text_width("=TAB VIEWS", self.scale, self.bold) + 12
 
         # Q (green)
-        draw_text(pixels, x, y, "Q", COLOR_INDICES["text_green"], self.scale)
-        x += get_text_width("Q", self.scale) + 2
+        draw_text(pixels, x, y, "Q", COLOR_INDICES["text_green"], self.scale, self.bold)
+        x += get_text_width("Q", self.scale, self.bold) + 2
         # =quit (gray)
-        draw_text(pixels, x, y, "=QUIT", COLOR_INDICES["text_dim"], self.scale)
+        draw_text(pixels, x, y, "=QUIT", COLOR_INDICES["text_dim"], self.scale, self.bold)
 
     def _draw_panel_border(
         self,
@@ -204,9 +207,9 @@ class MetricsRenderer:
         draw_horizontal_line(pixels, x, line_y, width, COLOR_INDICES["title_line"])
 
         # Draw title text centered
-        title_width = get_text_width(title, self.scale)
+        title_width = get_text_width(title, self.scale, self.bold)
         title_x = x + (width - title_width) // 2
-        draw_text(pixels, title_x, y, title, COLOR_INDICES["text_dim"], self.scale)
+        draw_text(pixels, title_x, y, title, COLOR_INDICES["text_dim"], self.scale, self.bold)
 
     def _draw_stat_row(
         self,
@@ -236,12 +239,12 @@ class MetricsRenderer:
         stat_x = panel_x + self.panel_padding
 
         # Draw label
-        draw_text(pixels, stat_x, y, label, COLOR_INDICES["text"], self.scale)
+        draw_text(pixels, stat_x, y, label, COLOR_INDICES["text"], self.scale, self.bold)
 
         # Draw value right-aligned within the panel
-        value_width = get_text_width(value, self.scale)
+        value_width = get_text_width(value, self.scale, self.bold)
         value_x = panel_x + panel_width - self.panel_padding - value_width
-        draw_text(pixels, value_x, y, value, value_color, self.scale)
+        draw_text(pixels, value_x, y, value, value_color, self.scale, self.bold)
 
     def _fmt(self, value: float, fmt: str, ready: bool, suffix: str = "") -> str:
         """Format a value, showing -- if stats not ready."""
@@ -472,9 +475,9 @@ class MetricsRenderer:
 
         # Draw pressure bar
         bar_x = self.left_x + self.panel_padding
-        bar_y = self.panel_top + self.panel_height - 25
+        bar_y = self.panel_top + self.panel_height - 15
         bar_width = self.left_panel_width - 2 * self.panel_padding
-        bar_height = 15
+        bar_height = 10
 
         # Background
         fill_rect(pixels, bar_x, bar_y, bar_width, bar_height, COLOR_INDICES["panel_bg"])
