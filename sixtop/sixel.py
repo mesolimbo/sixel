@@ -161,6 +161,98 @@ def draw_vertical_line(
     fill_rect(pixels, x, y, 1, length, color_idx)
 
 
+def draw_rounded_corner(
+    pixels: List[List[int]],
+    x: int, y: int,
+    radius: int,
+    color_idx: int,
+    corner: str
+) -> None:
+    """
+    Draw a rounded corner.
+
+    Args:
+        pixels: The pixel buffer
+        x, y: Position of the corner point
+        radius: Radius of the curve
+        color_idx: Color index for the corner
+        corner: One of 'tl' (top-left), 'tr' (top-right),
+                'bl' (bottom-left), 'br' (bottom-right)
+    """
+    # Draw a quarter circle arc using simple pixel approximation
+    for i in range(radius + 1):
+        for j in range(radius + 1):
+            # Check if point is on the edge of the circle
+            dist_sq = i * i + j * j
+            if (radius - 1) ** 2 <= dist_sq <= (radius + 1) ** 2:
+                if corner == 'tl':
+                    set_pixel(pixels, x + radius - i, y + radius - j, color_idx)
+                elif corner == 'tr':
+                    set_pixel(pixels, x + i, y + radius - j, color_idx)
+                elif corner == 'bl':
+                    set_pixel(pixels, x + radius - i, y + j, color_idx)
+                elif corner == 'br':
+                    set_pixel(pixels, x + i, y + j, color_idx)
+
+
+def draw_rounded_rect_border(
+    pixels: List[List[int]],
+    x: int, y: int,
+    w: int, h: int,
+    radius: int,
+    color_idx: int,
+    corners: str = "tltrblbr"
+) -> None:
+    """
+    Draw a rectangle border with rounded corners.
+
+    Args:
+        pixels: The pixel buffer
+        x, y: Top-left position
+        w, h: Width and height
+        radius: Corner radius
+        color_idx: Color index for the border
+        corners: Which corners to round (e.g., "tltr" for top corners only)
+    """
+    # Draw horizontal lines (excluding corners)
+    # Top line
+    draw_horizontal_line(pixels, x + radius, y, w - 2 * radius, color_idx)
+    # Bottom line
+    draw_horizontal_line(pixels, x + radius, y + h - 1, w - 2 * radius, color_idx)
+
+    # Draw vertical lines (excluding corners)
+    # Left line
+    draw_vertical_line(pixels, x, y + radius, h - 2 * radius, color_idx)
+    # Right line
+    draw_vertical_line(pixels, x + w - 1, y + radius, h - 2 * radius, color_idx)
+
+    # Draw rounded corners
+    if 'tl' in corners:
+        draw_rounded_corner(pixels, x, y, radius, color_idx, 'tl')
+    else:
+        # Square corner
+        draw_horizontal_line(pixels, x, y, radius, color_idx)
+        draw_vertical_line(pixels, x, y, radius, color_idx)
+
+    if 'tr' in corners:
+        draw_rounded_corner(pixels, x + w - 1 - radius, y, radius, color_idx, 'tr')
+    else:
+        draw_horizontal_line(pixels, x + w - radius, y, radius, color_idx)
+        draw_vertical_line(pixels, x + w - 1, y, radius, color_idx)
+
+    if 'bl' in corners:
+        draw_rounded_corner(pixels, x, y + h - 1 - radius, radius, color_idx, 'bl')
+    else:
+        draw_horizontal_line(pixels, x, y + h - 1, radius, color_idx)
+        draw_vertical_line(pixels, x, y + h - radius, radius, color_idx)
+
+    if 'br' in corners:
+        draw_rounded_corner(pixels, x + w - 1 - radius, y + h - 1 - radius, radius, color_idx, 'br')
+    else:
+        draw_horizontal_line(pixels, x + w - radius, y + h - 1, radius, color_idx)
+        draw_vertical_line(pixels, x + w - 1, y + h - radius, radius, color_idx)
+
+
 def draw_line_graph(
     pixels: List[List[int]],
     x: int, y: int,
