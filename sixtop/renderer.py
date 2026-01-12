@@ -6,7 +6,7 @@ Supports five views: Energy, CPU, I/O, Memory, Network.
 """
 
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional
 
 from sixel import (
     create_pixel_buffer,
@@ -94,12 +94,13 @@ class MetricsRenderer:
         self.current_view = views[(current_idx + 1) % len(views)]
         return self.current_view
 
-    def render_frame(self, metrics: MetricsCollector) -> str:
+    def render_frame(self, metrics: MetricsCollector, stats_ready: bool = True) -> str:
         """
         Render the current view as a sixel string.
 
         Args:
             metrics: MetricsCollector with current system metrics
+            stats_ready: Whether stats have been collected yet
 
         Returns:
             Sixel escape sequence string
@@ -116,15 +117,15 @@ class MetricsRenderer:
 
         # Render the appropriate view
         if self.current_view == MetricView.ENERGY:
-            self._render_energy_view(pixels, metrics)
+            self._render_energy_view(pixels, metrics, stats_ready)
         elif self.current_view == MetricView.CPU:
-            self._render_cpu_view(pixels, metrics)
+            self._render_cpu_view(pixels, metrics, stats_ready)
         elif self.current_view == MetricView.IO:
-            self._render_io_view(pixels, metrics)
+            self._render_io_view(pixels, metrics, stats_ready)
         elif self.current_view == MetricView.MEMORY:
-            self._render_memory_view(pixels, metrics)
+            self._render_memory_view(pixels, metrics, stats_ready)
         elif self.current_view == MetricView.NETWORK:
-            self._render_network_view(pixels, metrics)
+            self._render_network_view(pixels, metrics, stats_ready)
 
         return pixels_to_sixel(pixels, self.width, self.height)
 
@@ -175,10 +176,58 @@ class MetricsRenderer:
         title_x = x + (width - title_width) // 2
         draw_text(pixels, title_x, y, title, COLOR_INDICES["text_dim"], self.scale)
 
+    def _draw_stat_row(
+        self,
+        pixels: List[List[int]],
+        panel_x: int,
+        panel_width: int,
+        y: int,
+        label: str,
+        value: str,
+        value_color: int = None
+    ) -> None:
+        """
+        Draw a stat row with label on left and value right-aligned.
+
+        Args:
+            pixels: Pixel buffer
+            panel_x: X position of the panel
+            panel_width: Width of the panel
+            y: Y position for this row
+            label: Label text
+            value: Value text
+            value_color: Color index for value (default: text_cyan)
+        """
+        if value_color is None:
+            value_color = COLOR_INDICES["text_cyan"]
+
+        stat_x = panel_x + self.panel_padding
+
+        # Draw label
+        draw_text(pixels, stat_x, y, label, COLOR_INDICES["text"], self.scale)
+
+        # Draw value right-aligned within the panel
+        value_width = get_text_width(value, self.scale)
+        value_x = panel_x + panel_width - self.panel_padding - value_width
+        draw_text(pixels, value_x, y, value, value_color, self.scale)
+
+    def _fmt(self, value: float, fmt: str, ready: bool, suffix: str = "") -> str:
+        """Format a value, showing -- if stats not ready."""
+        if not ready:
+            return "--"
+        return f"{value:{fmt}}{suffix}"
+
+    def _fmt_int(self, value: int, ready: bool) -> str:
+        """Format an integer with commas, showing -- if not ready."""
+        if not ready:
+            return "--"
+        return f"{value:,}"
+
     def _render_energy_view(
         self,
         pixels: List[List[int]],
-        metrics: MetricsCollector
+        metrics: MetricsCollector,
+        ready: bool
     ) -> None:
         """Render the Energy Impact view."""
         row = self.row_height
@@ -203,31 +252,30 @@ class MetricsRenderer:
 
         # Center panel: Battery stats
         stat_y = self.padding + self.panel_padding
-        stat_x = self.center_x + self.panel_padding
 
-        draw_text(pixels, stat_x, stat_y, "CHARGE:",
-                 COLOR_INDICES["text"], self.scale)
-        charge_str = f"{metrics.battery.charge_percent:.0f}%" if metrics.battery.has_battery else "N/A"
-        draw_text(pixels, stat_x + 60, stat_y, charge_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        if ready and metrics.battery.has_battery:
+            charge_str = f"{metrics.battery.charge_percent:.0f}%"
+        else:
+            charge_str = "--" if not ready else "N/A"
+        self._draw_stat_row(pixels, self.center_x, self.center_panel_width,
+                           stat_y, "CHARGE:", charge_str)
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "REMAINING:",
-                 COLOR_INDICES["text"], self.scale)
-        if metrics.battery.time_remaining_minutes is not None:
+        if ready and metrics.battery.time_remaining_minutes is not None:
             time_str = f"{metrics.battery.time_remaining_minutes // 60}:{metrics.battery.time_remaining_minutes % 60:02d}"
         else:
-            time_str = "..."
-        draw_text(pixels, stat_x + 80, stat_y, time_str,
-                 COLOR_INDICES["text"], self.scale)
+            time_str = "--"
+        self._draw_stat_row(pixels, self.center_x, self.center_panel_width,
+                           stat_y, "REMAINING:", time_str, COLOR_INDICES["text"])
 
         stat_y += row
-        battery_mins = metrics.battery.time_on_battery_minutes
-        time_on_str = f"{battery_mins // 60}:{battery_mins % 60:02d}"
-        draw_text(pixels, stat_x, stat_y, "ON BATTERY:",
-                 COLOR_INDICES["text"], self.scale)
-        draw_text(pixels, stat_x + 90, stat_y, time_on_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        if ready:
+            battery_mins = metrics.battery.time_on_battery_minutes
+            time_on_str = f"{battery_mins // 60}:{battery_mins % 60:02d}"
+        else:
+            time_on_str = "--"
+        self._draw_stat_row(pixels, self.center_x, self.center_panel_width,
+                           stat_y, "ON BATTERY:", time_on_str)
 
         # Right panel: Battery level visualization
         self._draw_panel_border(pixels, self.right_x, self.padding,
@@ -241,7 +289,8 @@ class MetricsRenderer:
     def _render_cpu_view(
         self,
         pixels: List[List[int]],
-        metrics: MetricsCollector
+        metrics: MetricsCollector,
+        ready: bool
     ) -> None:
         """Render the CPU Load view."""
         row = self.row_height
@@ -251,30 +300,17 @@ class MetricsRenderer:
                                self.left_panel_width, self.height - 2 * self.padding)
 
         stat_y = self.padding + self.panel_padding
-        stat_x = self.left_x + self.panel_padding
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "SYSTEM:", self._fmt(metrics.cpu.system_percent, ".2f", ready, "%"))
 
-        # System CPU
-        draw_text(pixels, stat_x, stat_y, "SYSTEM:",
-                 COLOR_INDICES["text"], self.scale)
-        sys_str = f"{metrics.cpu.system_percent:.2f}%"
-        draw_text(pixels, stat_x + 65, stat_y, sys_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
-
-        # User CPU
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "USER:",
-                 COLOR_INDICES["text"], self.scale)
-        user_str = f"{metrics.cpu.user_percent:.2f}%"
-        draw_text(pixels, stat_x + 65, stat_y, user_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "USER:", self._fmt(metrics.cpu.user_percent, ".2f", ready, "%"))
 
-        # Idle CPU
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "IDLE:",
-                 COLOR_INDICES["text"], self.scale)
-        idle_str = f"{metrics.cpu.idle_percent:.2f}%"
-        draw_text(pixels, stat_x + 65, stat_y, idle_str,
-                 COLOR_INDICES["text"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "IDLE:", self._fmt(metrics.cpu.idle_percent, ".2f", ready, "%"),
+                           COLOR_INDICES["text"])
 
         # Center panel: CPU Load graph
         self._draw_panel_border(pixels, self.center_x, self.padding,
@@ -289,7 +325,6 @@ class MetricsRenderer:
         graph_width = self.center_panel_width - 2 * self.panel_padding
         user_data, system_data = metrics.get_cpu_graph_data()
 
-        # Combine for total visualization
         draw_dual_line_graph(
             pixels, graph_x, self.graph_y, graph_width, self.graph_height,
             user_data, system_data,
@@ -303,25 +338,18 @@ class MetricsRenderer:
                                self.right_panel_width, self.height - 2 * self.padding)
 
         stat_y = self.padding + self.panel_padding
-        stat_x = self.right_x + self.panel_padding
-
-        draw_text(pixels, stat_x, stat_y, "THREADS:",
-                 COLOR_INDICES["text"], self.scale)
-        thread_str = f"{metrics.cpu.thread_count:,}"
-        draw_text(pixels, stat_x + 70, stat_y, thread_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "THREADS:", self._fmt_int(metrics.cpu.thread_count, ready))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "PROCS:",
-                 COLOR_INDICES["text"], self.scale)
-        proc_str = f"{metrics.cpu.process_count:,}"
-        draw_text(pixels, stat_x + 70, stat_y, proc_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "PROCS:", self._fmt_int(metrics.cpu.process_count, ready))
 
     def _render_io_view(
         self,
         pixels: List[List[int]],
-        metrics: MetricsCollector
+        metrics: MetricsCollector,
+        ready: bool
     ) -> None:
         """Render the I/O (Disk) view."""
         row = self.row_height
@@ -331,34 +359,21 @@ class MetricsRenderer:
                                self.left_panel_width, self.height - 2 * self.padding)
 
         stat_y = self.padding + self.panel_padding
-        stat_x = self.left_x + self.panel_padding
-
-        draw_text(pixels, stat_x, stat_y, "READS:",
-                 COLOR_INDICES["text"], self.scale)
-        reads_str = f"{metrics.disk.reads_total:,}"
-        draw_text(pixels, stat_x + 55, stat_y, reads_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "READS:", self._fmt_int(metrics.disk.reads_total, ready))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "WRITES:",
-                 COLOR_INDICES["text"], self.scale)
-        writes_str = f"{metrics.disk.writes_total:,}"
-        draw_text(pixels, stat_x + 60, stat_y, writes_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "WRITES:", self._fmt_int(metrics.disk.writes_total, ready))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "R/SEC:",
-                 COLOR_INDICES["text"], self.scale)
-        rps_str = f"{metrics.disk.reads_per_sec:.0f}"
-        draw_text(pixels, stat_x + 55, stat_y, rps_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "R/SEC:", self._fmt(metrics.disk.reads_per_sec, ".0f", ready))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "W/SEC:",
-                 COLOR_INDICES["text"], self.scale)
-        wps_str = f"{metrics.disk.writes_per_sec:.0f}"
-        draw_text(pixels, stat_x + 55, stat_y, wps_str,
-                 COLOR_INDICES["text_red"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "W/SEC:", self._fmt(metrics.disk.writes_per_sec, ".0f", ready),
+                           COLOR_INDICES["text_red"])
 
         # Center panel: I/O graph
         self._draw_panel_border(pixels, self.center_x, self.padding,
@@ -368,7 +383,6 @@ class MetricsRenderer:
                         self.center_panel_width - 2 * self.panel_padding,
                         "IO")
 
-        # Draw I/O graph
         graph_x = self.center_x + self.panel_padding
         graph_width = self.center_panel_width - 2 * self.panel_padding
         read_data, write_data = metrics.get_disk_graph_data()
@@ -386,39 +400,26 @@ class MetricsRenderer:
                                self.right_panel_width, self.height - 2 * self.padding)
 
         stat_y = self.padding + self.panel_padding
-        stat_x = self.right_x + self.panel_padding
-
-        draw_text(pixels, stat_x, stat_y, "READ:",
-                 COLOR_INDICES["text"], self.scale)
-        dr_str = f"{metrics.disk.data_read_gb:.1f} GB"
-        draw_text(pixels, stat_x + 50, stat_y, dr_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "READ:", self._fmt(metrics.disk.data_read_gb, ".1f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "WRITE:",
-                 COLOR_INDICES["text"], self.scale)
-        dw_str = f"{metrics.disk.data_written_gb:.1f} GB"
-        draw_text(pixels, stat_x + 55, stat_y, dw_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "WRITE:", self._fmt(metrics.disk.data_written_gb, ".1f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "R/S:",
-                 COLOR_INDICES["text"], self.scale)
-        drs_str = f"{metrics.disk.data_read_per_sec_mb:.1f} MB"
-        draw_text(pixels, stat_x + 35, stat_y, drs_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "R/S:", self._fmt(metrics.disk.data_read_per_sec_mb, ".1f", ready, " MB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "W/S:",
-                 COLOR_INDICES["text"], self.scale)
-        dws_str = f"{metrics.disk.data_written_per_sec_mb:.0f} KB"
-        draw_text(pixels, stat_x + 35, stat_y, dws_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "W/S:", self._fmt(metrics.disk.data_written_per_sec_mb, ".0f", ready, " KB"))
 
     def _render_memory_view(
         self,
         pixels: List[List[int]],
-        metrics: MetricsCollector
+        metrics: MetricsCollector,
+        ready: bool
     ) -> None:
         """Render the Memory Pressure view."""
         row = self.row_height
@@ -440,74 +441,51 @@ class MetricsRenderer:
         # Background
         fill_rect(pixels, bar_x, bar_y, bar_width, bar_height, COLOR_INDICES["panel_bg"])
 
-        # Pressure bar
-        draw_bar_graph(
-            pixels, bar_x, bar_y, bar_width, bar_height,
-            metrics.memory.pressure_percent, COLOR_INDICES["graph_green"]
-        )
+        # Pressure bar (only if ready)
+        if ready:
+            draw_bar_graph(
+                pixels, bar_x, bar_y, bar_width, bar_height,
+                metrics.memory.pressure_percent, COLOR_INDICES["graph_green"]
+            )
 
         # Center panel: Memory stats
         stat_y = self.padding + self.panel_padding
-        stat_x = self.center_x + self.panel_padding
-
-        draw_text(pixels, stat_x, stat_y, "PHYSICAL:",
-                 COLOR_INDICES["text"], self.scale)
-        pm_str = f"{metrics.memory.physical_total_gb:.2f} GB"
-        draw_text(pixels, stat_x + 80, stat_y, pm_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.center_x, self.center_panel_width,
+                           stat_y, "PHYSICAL:", self._fmt(metrics.memory.physical_total_gb, ".2f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "USED:",
-                 COLOR_INDICES["text"], self.scale)
-        mu_str = f"{metrics.memory.physical_used_gb:.2f} GB"
-        draw_text(pixels, stat_x + 80, stat_y, mu_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.center_x, self.center_panel_width,
+                           stat_y, "USED:", self._fmt(metrics.memory.physical_used_gb, ".2f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "CACHED:",
-                 COLOR_INDICES["text"], self.scale)
-        cf_str = f"{metrics.memory.cached_gb:.2f} GB"
-        draw_text(pixels, stat_x + 80, stat_y, cf_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.center_x, self.center_panel_width,
+                           stat_y, "CACHED:", self._fmt(metrics.memory.cached_gb, ".2f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "SWAP:",
-                 COLOR_INDICES["text"], self.scale)
-        su_str = f"{metrics.memory.swap_used_gb:.2f} GB"
-        draw_text(pixels, stat_x + 80, stat_y, su_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.center_x, self.center_panel_width,
+                           stat_y, "SWAP:", self._fmt(metrics.memory.swap_used_gb, ".2f", ready, " GB"))
 
         # Right panel: App/System memory breakdown
         self._draw_panel_border(pixels, self.right_x, self.padding,
                                self.right_panel_width, self.height - 2 * self.padding)
 
         stat_y = self.padding + self.panel_padding
-        stat_x = self.right_x + self.panel_padding
-
-        draw_text(pixels, stat_x, stat_y, "APP:",
-                 COLOR_INDICES["text"], self.scale)
-        am_str = f"{metrics.memory.app_memory_gb:.2f} GB"
-        draw_text(pixels, stat_x + 40, stat_y, am_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "APP:", self._fmt(metrics.memory.app_memory_gb, ".2f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "WIRED:",
-                 COLOR_INDICES["text"], self.scale)
-        wm_str = f"{metrics.memory.wired_memory_gb:.2f} GB"
-        draw_text(pixels, stat_x + 55, stat_y, wm_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "WIRED:", self._fmt(metrics.memory.wired_memory_gb, ".2f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "COMP:",
-                 COLOR_INDICES["text"], self.scale)
-        cm_str = f"{metrics.memory.compressed_gb:.2f} GB"
-        draw_text(pixels, stat_x + 50, stat_y, cm_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "COMP:", self._fmt(metrics.memory.compressed_gb, ".2f", ready, " GB"))
 
     def _render_network_view(
         self,
         pixels: List[List[int]],
-        metrics: MetricsCollector
+        metrics: MetricsCollector,
+        ready: bool
     ) -> None:
         """Render the Network (Packets) view."""
         row = self.row_height
@@ -517,34 +495,21 @@ class MetricsRenderer:
                                self.left_panel_width, self.height - 2 * self.padding)
 
         stat_y = self.padding + self.panel_padding
-        stat_x = self.left_x + self.panel_padding
-
-        draw_text(pixels, stat_x, stat_y, "PKT IN:",
-                 COLOR_INDICES["text"], self.scale)
-        pi_str = f"{metrics.network.packets_in_total:,}"
-        draw_text(pixels, stat_x + 60, stat_y, pi_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "PKT IN:", self._fmt_int(metrics.network.packets_in_total, ready))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "PKT OUT:",
-                 COLOR_INDICES["text"], self.scale)
-        po_str = f"{metrics.network.packets_out_total:,}"
-        draw_text(pixels, stat_x + 70, stat_y, po_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "PKT OUT:", self._fmt_int(metrics.network.packets_out_total, ready))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "IN/SEC:",
-                 COLOR_INDICES["text"], self.scale)
-        pis_str = f"{metrics.network.packets_in_per_sec:.0f}"
-        draw_text(pixels, stat_x + 60, stat_y, pis_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "IN/SEC:", self._fmt(metrics.network.packets_in_per_sec, ".0f", ready))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "OUT/SEC:",
-                 COLOR_INDICES["text"], self.scale)
-        pos_str = f"{metrics.network.packets_out_per_sec:.0f}"
-        draw_text(pixels, stat_x + 70, stat_y, pos_str,
-                 COLOR_INDICES["text_red"], self.scale)
+        self._draw_stat_row(pixels, self.left_x, self.left_panel_width,
+                           stat_y, "OUT/SEC:", self._fmt(metrics.network.packets_out_per_sec, ".0f", ready),
+                           COLOR_INDICES["text_red"])
 
         # Center panel: Network graph
         self._draw_panel_border(pixels, self.center_x, self.padding,
@@ -554,7 +519,6 @@ class MetricsRenderer:
                         self.center_panel_width - 2 * self.panel_padding,
                         "PACKETS")
 
-        # Draw network graph
         graph_x = self.center_x + self.panel_padding
         graph_width = self.center_panel_width - 2 * self.panel_padding
         recv_data, sent_data = metrics.get_network_graph_data()
@@ -572,31 +536,17 @@ class MetricsRenderer:
                                self.right_panel_width, self.height - 2 * self.padding)
 
         stat_y = self.padding + self.panel_padding
-        stat_x = self.right_x + self.panel_padding
-
-        draw_text(pixels, stat_x, stat_y, "RECV:",
-                 COLOR_INDICES["text"], self.scale)
-        dr_str = f"{metrics.network.data_received_gb:.2f} GB"
-        draw_text(pixels, stat_x + 50, stat_y, dr_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "RECV:", self._fmt(metrics.network.data_received_gb, ".2f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "SENT:",
-                 COLOR_INDICES["text"], self.scale)
-        ds_str = f"{metrics.network.data_sent_gb:.2f} GB"
-        draw_text(pixels, stat_x + 50, stat_y, ds_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "SENT:", self._fmt(metrics.network.data_sent_gb, ".2f", ready, " GB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "R/SEC:",
-                 COLOR_INDICES["text"], self.scale)
-        drs_str = f"{metrics.network.data_received_per_sec_kb:.0f} KB"
-        draw_text(pixels, stat_x + 55, stat_y, drs_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "R/SEC:", self._fmt(metrics.network.data_received_per_sec_kb, ".0f", ready, " KB"))
 
         stat_y += row
-        draw_text(pixels, stat_x, stat_y, "S/SEC:",
-                 COLOR_INDICES["text"], self.scale)
-        dss_str = f"{metrics.network.data_sent_per_sec_kb:.0f} KB"
-        draw_text(pixels, stat_x + 55, stat_y, dss_str,
-                 COLOR_INDICES["text_cyan"], self.scale)
+        self._draw_stat_row(pixels, self.right_x, self.right_panel_width,
+                           stat_y, "S/SEC:", self._fmt(metrics.network.data_sent_per_sec_kb, ".0f", ready, " KB"))
