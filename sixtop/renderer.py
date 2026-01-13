@@ -63,15 +63,15 @@ class MetricsRenderer:
         """
         self.width = width
         self.height = height
-        self.scale = scale
+        self.scale = 2  # Doubled for better text visibility
 
-        # Layout constants - tight spacing
-        self.padding = 4
+        # Layout constants - doubled for better visibility
+        self.padding = 8
         self.border_width = 1
-        self.panel_padding = 3
-        self.row_height = 10  # Tight row spacing
-        self.corner_radius = 5  # Rounded corner radius
-        self.instruction_height = 10  # Height for instruction bar at top
+        self.panel_padding = 6
+        self.row_height = 20  # Doubled row spacing
+        self.corner_radius = 10  # Doubled corner radius
+        self.instruction_height = 20  # Doubled instruction bar height
 
         # Three-column layout
         self.left_panel_width = (width - 4 * self.padding) // 3
@@ -87,9 +87,9 @@ class MetricsRenderer:
         # Panel height (excluding instruction bar area)
         self.panel_height = height - self.panel_top - self.padding
 
-        # Graph area - tight layout
-        self.graph_y = self.panel_top + 14
-        self.graph_height = self.panel_height - 18
+        # Graph area - doubled layout
+        self.graph_y = self.panel_top + 28
+        self.graph_height = self.panel_height - 36
 
         # Text rendering - bold for better visibility
         self.bold = True
@@ -153,19 +153,19 @@ class MetricsRenderer:
     def _draw_instructions(self, pixels: List[List[int]]) -> None:
         """Draw the instruction text at the top of the frame."""
         # Draw "T=tab views  Q=quit" with green highlighting for keys
-        y = self.padding + 1
-        x = self.padding + 4
+        y = self.padding + 2
+        x = self.padding + 8
 
         # T (green)
         draw_text(pixels, x, y, "T", COLOR_INDICES["text_green"], self.scale, self.bold)
-        x += get_text_width("T", self.scale, self.bold) + 2
+        x += get_text_width("T", self.scale, self.bold) + 4
         # =tab views (gray)
         draw_text(pixels, x, y, "=TAB VIEWS", COLOR_INDICES["text_dim"], self.scale, self.bold)
-        x += get_text_width("=TAB VIEWS", self.scale, self.bold) + 12
+        x += get_text_width("=TAB VIEWS", self.scale, self.bold) + 24
 
         # Q (green)
         draw_text(pixels, x, y, "Q", COLOR_INDICES["text_green"], self.scale, self.bold)
-        x += get_text_width("Q", self.scale, self.bold) + 2
+        x += get_text_width("Q", self.scale, self.bold) + 4
         # =quit (gray)
         draw_text(pixels, x, y, "=QUIT", COLOR_INDICES["text_dim"], self.scale, self.bold)
 
@@ -203,7 +203,7 @@ class MetricsRenderer:
     ) -> None:
         """Draw a section title with underline."""
         # Draw title line
-        line_y = y + FONT_HEIGHT * self.scale + 2
+        line_y = y + FONT_HEIGHT * self.scale + 4
         draw_horizontal_line(pixels, x, line_y, width, COLOR_INDICES["title_line"])
 
         # Draw title text centered
@@ -475,9 +475,9 @@ class MetricsRenderer:
 
         # Draw pressure bar
         bar_x = self.left_x + self.panel_padding
-        bar_y = self.panel_top + self.panel_height - 15
+        bar_y = self.panel_top + self.panel_height - 30
         bar_width = self.left_panel_width - 2 * self.panel_padding
-        bar_height = 10
+        bar_height = 20
 
         # Background
         fill_rect(pixels, bar_x, bar_y, bar_width, bar_height, COLOR_INDICES["panel_bg"])
