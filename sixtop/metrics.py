@@ -188,24 +188,12 @@ class MetricsCollector:
             self.cpu.system_history.append(self.cpu.system_percent)
             self.cpu.user_history.append(self.cpu.user_percent)
 
-            # Get process and thread counts
+            # Get process count
             self.cpu.process_count = len(psutil.pids())
 
-            # Count threads (this can be slow, so we estimate)
-            # On Windows, we can get thread count more efficiently
-            thread_count = 0
-            try:
-                for proc in psutil.process_iter(['num_threads']):
-                    try:
-                        threads = proc.info.get('num_threads', 0)
-                        if threads:
-                            thread_count += threads
-                    except (psutil.NoSuchProcess, psutil.AccessDenied):
-                        pass
-            except Exception:
-                thread_count = self.cpu.process_count * 4  # Rough estimate
-
-            self.cpu.thread_count = thread_count
+            # Estimate thread count (iterating all processes is too slow)
+            # Average ~4 threads per process is a reasonable estimate
+            self.cpu.thread_count = self.cpu.process_count * 4
 
         except (AttributeError, RuntimeError) as e:
             pass
