@@ -10,7 +10,6 @@ Uses threading to ensure responsive input even during rendering.
 import sys
 import time
 import threading
-import platform
 from queue import Queue, Empty
 from typing import Optional, Callable, Tuple
 
@@ -114,33 +113,29 @@ def run_app_loop(
 
     # Calculate how many terminal rows the sixel output occupies
     # Sixel uses 6 pixels per character row
-    base_sixel_rows = (renderer.height + 5) // 6
-    # macOS terminals scroll more aggressively, so use minimal margin
-    # Windows needs more margin for proper positioning
-    if platform.system() == "Darwin":
-        sixel_rows = base_sixel_rows  # No extra margin on macOS
-    else:
-        sixel_rows = base_sixel_rows + 1  # Add margin on Windows/Linux
-
-    # Whether to add top margin (skip on macOS to reduce scroll pressure)
-    add_top_margin = platform.system() != "Darwin"
+    sixel_rows = (renderer.height + 5) // 6
 
     def render_frame():
         """Helper to render and display a frame."""
         frame = renderer.render_frame(metrics, stats_ready=stats_ready)
-        # Restore to saved position, render, then save again
+        # Restore to saved position and render
         terminal.write(RESTORE_CURSOR)
-        if add_top_margin:
-            terminal.write("\n")  # Top margin (Windows/Linux only)
+        terminal.write("\n")  # Top margin to avoid clipping command line
         terminal.write(frame)
         terminal.flush()
 
     try:
         with terminal:
+            # Get terminal height to calculate how much space to reserve
+            _, term_height = terminal.get_size()
+            # Reserve less space on taller terminals to avoid unnecessary scroll
+            # Use at most 1/3 of terminal height, capped at what sixel needs
+            # Add 1 for top margin to avoid clipping command line
+            rows_to_reserve = min(sixel_rows + 1, max(8, term_height // 3))
             # Reserve space by printing blank lines
-            terminal.write("\n" * sixel_rows)
+            terminal.write("\n" * rows_to_reserve)
             # Move back up to create render area
-            terminal.write(MOVE_UP.format(sixel_rows))
+            terminal.write(MOVE_UP.format(rows_to_reserve))
             # Save this position as our anchor point
             terminal.write(SAVE_CURSOR)
             terminal.flush()
