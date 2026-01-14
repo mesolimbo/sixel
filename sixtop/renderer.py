@@ -322,6 +322,33 @@ class MetricsRenderer:
                         self.right_panel_width - 2 * self.panel_padding,
                         "BATTERY")
 
+        # Draw battery level bar
+        bar_x = self.right_x + self.panel_padding
+        bar_width = self.right_panel_width - 2 * self.panel_padding
+        bar_height = self.graph_height
+        bar_y = self.graph_y
+
+        if ready:
+            charge = metrics.battery.charge_percent if metrics.battery.has_battery else 0
+            # Draw background (empty battery)
+            for y in range(bar_y, bar_y + bar_height):
+                for x in range(bar_x, bar_x + bar_width):
+                    pixels[y][x] = COLOR_INDICES["bg_dark"]
+
+            # Draw filled portion based on charge
+            fill_width = int(bar_width * charge / 100)
+            # Color based on charge level
+            if charge > 50:
+                fill_color = COLOR_INDICES["graph_green"]
+            elif charge > 20:
+                fill_color = COLOR_INDICES["graph_yellow"]
+            else:
+                fill_color = COLOR_INDICES["graph_red"]
+
+            for y in range(bar_y, bar_y + bar_height):
+                for x in range(bar_x, bar_x + fill_width):
+                    pixels[y][x] = fill_color
+
     def _render_cpu_view(
         self,
         pixels: List[List[int]],
