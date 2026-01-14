@@ -283,7 +283,7 @@ class MetricsRenderer:
         draw_line_graph(
             pixels, graph_x, self.graph_y, graph_width, self.graph_height,
             energy_data, COLOR_INDICES["graph_blue"],
-            fill_color=None, max_value=100.0
+            fill_color=COLOR_INDICES["graph_fill_blue"], max_value=100.0
         )
 
         # Center panel: Battery stats
@@ -457,7 +457,7 @@ class MetricsRenderer:
             pixels, graph_x, self.graph_y, graph_width, self.graph_height,
             read_data, write_data,
             COLOR_INDICES["graph_cyan"], COLOR_INDICES["graph_red"],
-            None, None,
+            COLOR_INDICES["graph_fill_cyan"], COLOR_INDICES["graph_fill_red"],
             max_value=100.0
         )
 
@@ -597,7 +597,7 @@ class MetricsRenderer:
             pixels, graph_x, self.graph_y, graph_width, self.graph_height,
             recv_data, sent_data,
             COLOR_INDICES["graph_cyan"], COLOR_INDICES["graph_red"],
-            None, None,
+            COLOR_INDICES["graph_fill_cyan"], COLOR_INDICES["graph_fill_red"],
             max_value=100.0
         )
 
