@@ -81,6 +81,12 @@ class TestColorPalette:
             "graph_red",
             "graph_green",
             "graph_blue",
+            "graph_fill_cyan",
+            "graph_fill_red",
+            "graph_fill_green",
+            "graph_fill_blue",
+            "graph_yellow",
+            "bg_dark",
         ]
         for color in required_colors:
             assert color in COLORS, f"Missing color: {color}"
@@ -466,3 +472,45 @@ class TestRendererBattery:
 
         assert output.startswith(SIXEL_START)
         assert output.endswith(SIXEL_END)
+
+    def test_render_battery_level_high(self, mock_metrics):
+        """Battery bar should render green for high charge (>50%)."""
+        mock_metrics.battery.has_battery = True
+        mock_metrics.battery.charge_percent = 75.0
+
+        renderer = MetricsRenderer()
+        renderer.current_view = MetricView.ENERGY
+        output = renderer.render_frame(mock_metrics)
+
+        assert output.startswith(SIXEL_START)
+        assert output.endswith(SIXEL_END)
+        # Should contain the green graph color
+        assert f"#{COLOR_INDICES['graph_green']}" in output
+
+    def test_render_battery_level_medium(self, mock_metrics):
+        """Battery bar should render yellow for medium charge (21-50%)."""
+        mock_metrics.battery.has_battery = True
+        mock_metrics.battery.charge_percent = 35.0
+
+        renderer = MetricsRenderer()
+        renderer.current_view = MetricView.ENERGY
+        output = renderer.render_frame(mock_metrics)
+
+        assert output.startswith(SIXEL_START)
+        assert output.endswith(SIXEL_END)
+        # Should contain the yellow graph color
+        assert f"#{COLOR_INDICES['graph_yellow']}" in output
+
+    def test_render_battery_level_low(self, mock_metrics):
+        """Battery bar should render red for low charge (<=20%)."""
+        mock_metrics.battery.has_battery = True
+        mock_metrics.battery.charge_percent = 15.0
+
+        renderer = MetricsRenderer()
+        renderer.current_view = MetricView.ENERGY
+        output = renderer.render_frame(mock_metrics)
+
+        assert output.startswith(SIXEL_START)
+        assert output.endswith(SIXEL_END)
+        # Should contain the red graph color
+        assert f"#{COLOR_INDICES['graph_red']}" in output

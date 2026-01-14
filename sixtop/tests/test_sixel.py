@@ -591,7 +591,7 @@ class TestConstants:
             "text", "text_dim", "text_cyan", "text_red", "text_green",
             "graph_cyan", "graph_red", "graph_green", "graph_blue",
             "graph_fill_cyan", "graph_fill_red", "graph_fill_green",
-            "title_line"
+            "graph_fill_blue", "graph_yellow", "title_line", "bg_dark"
         ]
         for color in expected:
             assert color in COLORS, f"Missing color: {color}"
