@@ -10,6 +10,7 @@ Uses threading to ensure responsive input even during rendering.
 import sys
 import time
 import threading
+import platform
 from queue import Queue, Empty
 from typing import Optional, Callable, Tuple
 
@@ -112,15 +113,25 @@ def run_app_loop(
     stats_ready = False
 
     # Calculate how many terminal rows the sixel output occupies
-    # Sixel uses 6 pixels per character row, plus 1 for top margin
-    sixel_rows = (renderer.height + 5) // 6 + 1
+    # Sixel uses 6 pixels per character row
+    base_sixel_rows = (renderer.height + 5) // 6
+    # macOS terminals scroll more aggressively, so use minimal margin
+    # Windows needs more margin for proper positioning
+    if platform.system() == "Darwin":
+        sixel_rows = base_sixel_rows  # No extra margin on macOS
+    else:
+        sixel_rows = base_sixel_rows + 1  # Add margin on Windows/Linux
+
+    # Whether to add top margin (skip on macOS to reduce scroll pressure)
+    add_top_margin = platform.system() != "Darwin"
 
     def render_frame():
         """Helper to render and display a frame."""
         frame = renderer.render_frame(metrics, stats_ready=stats_ready)
         # Restore to saved position, render, then save again
         terminal.write(RESTORE_CURSOR)
-        terminal.write("\n")  # Top margin
+        if add_top_margin:
+            terminal.write("\n")  # Top margin (Windows/Linux only)
         terminal.write(frame)
         terminal.flush()
 
