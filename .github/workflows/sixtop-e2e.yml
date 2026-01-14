@@ -1,0 +1,70 @@
+name: Sixtop E2E Tests
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths:
+      - 'sixtop/**'
+      - '.github/workflows/sixtop-e2e.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'sixtop/**'
+      - '.github/workflows/sixtop-e2e.yml'
+  workflow_dispatch:
+
+jobs:
+  e2e-native:
+    name: E2E Tests (Native)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        working-directory: ./sixtop
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipenv pytest psutil
+          pipenv install --system --deploy --ignore-pipfile || pipenv install --system
+
+      - name: Run E2E render tests
+        working-directory: ./sixtop
+        run: |
+          pytest tests/test_render_e2e.py -v --tb=short
+
+  e2e-matrix:
+    name: E2E Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        python-version: ['3.13']
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        working-directory: ./sixtop
+        run: |
+          python -m pip install --upgrade pip
+          pip install pipenv pytest psutil
+          pipenv install --system --deploy --ignore-pipfile || pipenv install --system
+
+      - name: Run E2E render tests
+        working-directory: ./sixtop
+        run: |
+          pytest tests/test_render_e2e.py -v --tb=short

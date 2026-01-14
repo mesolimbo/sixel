@@ -1,16 +1,16 @@
-name: Sixel Render E2E Tests
+name: Snake E2E Tests
 
 on:
   push:
     branches: [main, 'claude/**']
     paths:
       - 'snake/**'
-      - '.github/workflows/test-render.yml'
+      - '.github/workflows/snake-e2e.yml'
   pull_request:
     branches: [main]
     paths:
       - 'snake/**'
-      - '.github/workflows/test-render.yml'
+      - '.github/workflows/snake-e2e.yml'
   workflow_dispatch:
 
 jobs:

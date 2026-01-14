@@ -1,13 +1,37 @@
-name: Tests
+name: Unit Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/**']
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 jobs:
-  test:
+  detect-changes:
+    name: Detect Changes
+    runs-on: ubuntu-latest
+    outputs:
+      snake: ${{ steps.filter.outputs.snake }}
+      sixtop: ${{ steps.filter.outputs.sixtop }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            snake:
+              - 'snake/**'
+              - '.github/workflows/tests.yml'
+            sixtop:
+              - 'sixtop/**'
+              - '.github/workflows/tests.yml'
+
+  snake-unit:
+    name: Snake Unit Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.snake == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,5 +51,31 @@ jobs:
       - name: Install dependencies
         run: pipenv install --dev
 
-      - name: Run tests
+      - name: Run unit tests
+        run: pipenv run make unit
+
+  sixtop-unit:
+    name: Sixtop Unit Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.sixtop == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sixtop
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pipenv
+        run: pip install pipenv
+
+      - name: Install dependencies
+        run: pipenv install --dev
+
+      - name: Run unit tests
         run: pipenv run make unit
