@@ -40,7 +40,9 @@ COLORS = {
     "graph_fill_cyan": (0, 100, 120),   # Fill color for cyan graphs
     "graph_fill_red": (120, 40, 40),    # Fill color for red graphs
     "graph_fill_green": (40, 100, 40),  # Fill color for green graphs
+    "graph_yellow": (220, 180, 60),     # Yellow for medium battery
     "title_line": (60, 60, 60),         # Title underline
+    "bg_dark": (25, 25, 25),            # Darker background for empty areas
 }
 
 COLOR_INDICES = {name: idx for idx, name in enumerate(COLORS.keys())}
