@@ -1,4 +1,4 @@
-.PHONY: install install-dev run shell clean dist unit coverage help
+.PHONY: install install-dev run shell clean dist unit e2e test coverage help
 
 DIST_NAME = sixtop
 DIST_DIR = dist
@@ -13,7 +13,9 @@ help:
 	@echo "  shell         Activate the pipenv shell"
 	@echo "  clean         Remove virtual environment and build artifacts"
 	@echo "  dist          Create zip for distribution"
-	@echo "  unit          Run unit tests"
+	@echo "  unit          Run unit tests (excludes e2e)"
+	@echo "  e2e           Run end-to-end tests"
+	@echo "  test          Run all tests (unit + e2e)"
 	@echo "  coverage      Run tests with coverage report"
 	@echo "  help          Show this help message"
 
@@ -44,6 +46,12 @@ dist:
 
 # Testing targets
 unit:
+	pipenv run python -m pytest tests/ -v --ignore=tests/test_render_e2e.py
+
+e2e:
+	pipenv run python -m pytest tests/test_render_e2e.py -v
+
+test:
 	pipenv run python -m pytest tests/ -v
 
 coverage:
