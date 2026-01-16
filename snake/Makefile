@@ -48,10 +48,10 @@ dist:
 
 # Testing targets
 unit:
-	pipenv run python -m pytest tests/ -v --ignore=tests/test_render_e2e.py
+	pipenv run python -m pytest tests/ -v --ignore=tests/test_render_e2e.py --ignore=tests/test_screenshot.py
 
 e2e:
-	pipenv run pytest tests/test_render_e2e.py -v --tb=short
+	pipenv run pytest tests/test_render_e2e.py tests/test_screenshot.py -v --tb=short
 
 e2e-docker: docker-build
 	docker run --rm $(DOCKER_IMAGE)
