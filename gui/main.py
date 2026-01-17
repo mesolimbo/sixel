@@ -34,11 +34,12 @@ from gui import (
     Slider,
     ProgressBar,
     ListBox,
+    ImageDisplay,
 )
 
 
 def create_demo_gui() -> GUIState:
-    """Create the demo GUI with 7 windows showcasing different components."""
+    """Create the demo GUI with 8 windows showcasing different components."""
     gui = GUIState()
 
     # Layout constants
@@ -66,8 +67,7 @@ def create_demo_gui() -> GUIState:
         y=start_y + title_bar_height + 10,
         width=window_width - 20,
         height=28,
-        label="PRIMARY",
-        on_click=lambda: print("Primary clicked!")
+        label="PRIMARY"
     ))
 
     # Secondary button
@@ -76,8 +76,7 @@ def create_demo_gui() -> GUIState:
         y=start_y + title_bar_height + 45,
         width=window_width - 20,
         height=28,
-        label="SECONDARY",
-        on_click=lambda: print("Secondary clicked!")
+        label="SECONDARY"
     ))
 
     # Disabled button
@@ -301,6 +300,31 @@ def create_demo_gui() -> GUIState:
 
     gui.add_window(list_window)
 
+    # ============================================================
+    # Window 8: Image Display
+    # ============================================================
+    image_window = Window(
+        title="IMAGE",
+        x=start_x + 7 * (window_width + window_gap),
+        y=start_y,
+        width=window_width,
+        height=window_height
+    )
+
+    image_x = image_window.x + 10
+    image_y_start = image_window.y + title_bar_height + 5
+
+    # Load the squirrel image
+    image_path = str(Path(__file__).parent / "demo" / "squirel.png")
+    image_display = ImageDisplay(
+        x=image_x, y=image_y_start,
+        width=window_width - 20, height=100,
+        image_path=image_path
+    )
+    image_window.add_component(image_display)
+
+    gui.add_window(image_window)
+
     return gui
 
 
@@ -359,10 +383,10 @@ def main():
     # Link sliders to progress bars
     link_sliders_to_progress_bars(gui)
 
-    # Calculate dimensions for 7 windows
+    # Calculate dimensions for 8 windows
     # Each window is 160px wide with 10px gap
-    # Total: 7 * 160 + 6 * 10 + 20 (margins) = 1200
-    width = 1200
+    # Total: 8 * 160 + 7 * 10 + 20 (margins) = 1370
+    width = 1370
     height = 180  # Enough for windows + instructions
 
     # Create renderer
