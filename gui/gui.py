@@ -15,7 +15,14 @@ SOLID Principles Applied:
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Protocol, Tuple, List, Optional, Callable, runtime_checkable
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 
 class ComponentState(Enum):
@@ -158,7 +165,7 @@ class Button(Component):
     """
     A clickable button component.
 
-    Supports click callbacks and visual state changes.
+    Supports toggle mode where button stays pressed until clicked again.
     """
 
     def __init__(
@@ -166,24 +173,31 @@ class Button(Component):
         x: int, y: int,
         width: int, height: int,
         label: str,
-        on_click: Optional[Callable[[], None]] = None
+        on_click: Optional[Callable[[], None]] = None,
+        toggle: bool = False
     ):
         super().__init__(x, y, width, height)
         self.label = label
         self._on_click = on_click
-        self._click_count = 0
+        self._toggle_mode = toggle
+        self._toggled = False
+
+    @property
+    def toggled(self) -> bool:
+        """Get the toggled state."""
+        return self._toggled
+
+    def toggle(self) -> None:
+        """Toggle the button state."""
+        if self._enabled:
+            self._toggled = not self._toggled
+            if self._on_click:
+                self._on_click()
 
     def on_click(self, px: int, py: int) -> None:
         """Handle click event."""
         if self._enabled and self.contains_point(px, py):
-            self._click_count += 1
-            if self._on_click:
-                self._on_click()
-
-    @property
-    def click_count(self) -> int:
-        """Get the number of times this button has been clicked."""
-        return self._click_count
+            self.toggle()
 
 
 class Checkbox(Component):
@@ -579,6 +593,131 @@ class ListBox(Component):
             self._hover_index = -1
 
 
+class ImageDisplay(Component):
+    """
+    An image display component that renders a PNG image with zoom support.
+
+    Supports power-of-two pixel-perfect zoom levels.
+    """
+
+    # Zoom levels as powers of 2 (negative = zoom out, positive = zoom in)
+    # -2 = 1/4, -1 = 1/2, 0 = 1x, 1 = 2x, 2 = 4x
+    MIN_ZOOM_LEVEL = -2
+    MAX_ZOOM_LEVEL = 3
+
+    def __init__(
+        self,
+        x: int, y: int,
+        width: int, height: int,
+        image_path: Optional[str] = None,
+        on_zoom: Optional[Callable[[int], None]] = None
+    ):
+        super().__init__(x, y, width, height)
+        self._image_path = image_path
+        self._zoom_level = 0  # 0 = 1x, 1 = 2x, -1 = 0.5x, etc.
+        self._on_zoom = on_zoom
+        self._image_data: Optional[List[List[Tuple[int, int, int]]]] = None
+        self._indexed_data: Optional[List[List[int]]] = None  # Cached palette-indexed version
+        self._image_width = 0
+        self._image_height = 0
+
+        if image_path:
+            self._load_image(image_path)
+
+    def _load_image(self, path: str) -> bool:
+        """Load an image from the given path."""
+        if not PIL_AVAILABLE:
+            return False
+
+        try:
+            img = Image.open(path)
+            # Convert to RGB if necessary
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+
+            self._image_width = img.width
+            self._image_height = img.height
+
+            # Store as 2D array of RGB tuples
+            self._image_data = []
+            for y in range(img.height):
+                row = []
+                for x in range(img.width):
+                    row.append(img.getpixel((x, y)))
+                self._image_data.append(row)
+
+            return True
+        except Exception:
+            return False
+
+    @property
+    def image_path(self) -> Optional[str]:
+        return self._image_path
+
+    @property
+    def zoom_level(self) -> int:
+        """Get the current zoom level (power of 2 exponent)."""
+        return self._zoom_level
+
+    @property
+    def zoom_factor(self) -> float:
+        """Get the actual zoom factor (e.g., 0.5, 1.0, 2.0, 4.0)."""
+        return 2 ** self._zoom_level
+
+    @property
+    def image_data(self) -> Optional[List[List[Tuple[int, int, int]]]]:
+        """Get the raw image data as RGB tuples."""
+        return self._image_data
+
+    @property
+    def indexed_data(self) -> Optional[List[List[int]]]:
+        """Get the palette-indexed image data (cached)."""
+        return self._indexed_data
+
+    @indexed_data.setter
+    def indexed_data(self, value: Optional[List[List[int]]]) -> None:
+        """Set the palette-indexed image data cache."""
+        self._indexed_data = value
+
+    @property
+    def image_width(self) -> int:
+        return self._image_width
+
+    @property
+    def image_height(self) -> int:
+        return self._image_height
+
+    def zoom_in(self) -> bool:
+        """
+        Zoom in by one power of two.
+
+        Returns True if zoom changed.
+        """
+        if self._zoom_level < self.MAX_ZOOM_LEVEL:
+            self._zoom_level += 1
+            if self._on_zoom:
+                self._on_zoom(self._zoom_level)
+            return True
+        return False
+
+    def zoom_out(self) -> bool:
+        """
+        Zoom out by one power of two.
+
+        Returns True if zoom changed.
+        """
+        if self._zoom_level > self.MIN_ZOOM_LEVEL:
+            self._zoom_level -= 1
+            if self._on_zoom:
+                self._on_zoom(self._zoom_level)
+            return True
+        return False
+
+    def on_click(self, px: int, py: int) -> None:
+        """ImageDisplay doesn't respond to clicks directly."""
+        pass
+
+
 @dataclass
 class Window:
     """
@@ -711,13 +850,7 @@ class GUIState:
 
         # Handle different component types
         if isinstance(component, Button):
-            # Show pressed state briefly for visual feedback
-            component.state = ComponentState.PRESSED
-            # Directly increment click count and call callback (don't use on_click which checks coordinates)
-            component._click_count += 1
-            if component._on_click:
-                component._on_click()
-            # Note: state will be reset to FOCUSED on next input event
+            component.toggle()
             return True
         elif isinstance(component, Checkbox):
             component.toggle()
@@ -808,6 +941,15 @@ class GUIState:
                     self._component_index_per_window[id(window)] = current_idx + 1
                     self._update_focus_visuals()
                     return True
+
+        # ImageDisplay: up/right to zoom in, down/left to zoom out
+        elif isinstance(component, ImageDisplay):
+            if key_name in ('up', 'right'):
+                component.zoom_in()
+                return True
+            elif key_name in ('down', 'left'):
+                component.zoom_out()
+                return True
 
         # RadioButton, Checkbox, Button, ListBox: up/down to move between items
         elif isinstance(component, (RadioButton, Checkbox, Button, ListBox)):

@@ -36,6 +36,7 @@ from gui import (
     Slider,
     ProgressBar,
     ListBox,
+    ImageDisplay,
 )
 
 
@@ -175,6 +176,8 @@ class GUIRenderer:
             self._render_progress_bar(pixels, component)
         elif isinstance(component, ListBox):
             self._render_list_box(pixels, component)
+        elif isinstance(component, ImageDisplay):
+            self._render_image_display(pixels, component)
 
     def _get_button_colors(self, state: ComponentState) -> Tuple[int, int, int]:
         """Get background, border, and text colors for button state."""
@@ -205,7 +208,13 @@ class GUIRenderer:
 
     def _render_button(self, pixels: List[List[int]], button: Button) -> None:
         """Render a button component."""
-        bg_color, border_color, text_color = self._get_button_colors(button.state)
+        # Use pressed colors if button is toggled on
+        if button.toggled:
+            bg_color = COLOR_INDICES["button_pressed"]
+            border_color = COLOR_INDICES["accent"]
+            text_color = COLOR_INDICES["text_highlight"]
+        else:
+            bg_color, border_color, text_color = self._get_button_colors(button.state)
 
         # Draw rounded rectangle
         draw_rounded_rect_filled(
@@ -219,14 +228,6 @@ class GUIRenderer:
         label_x = button.x + (button.width - label_width) // 2
         label_y = button.y + (button.height - FONT_HEIGHT * self.scale) // 2
         draw_text(pixels, label_x, label_y, button.label, text_color, self.scale, self.bold)
-
-        # Show click count if clicked
-        if button.click_count > 0:
-            count_text = str(button.click_count)
-            count_x = button.x + button.width - 12
-            count_y = button.y + 2
-            draw_text(pixels, count_x, count_y, count_text,
-                     COLOR_INDICES["accent"], 1, False)
 
     def _render_checkbox(self, pixels: List[List[int]], checkbox: Checkbox) -> None:
         """Render a checkbox component."""
@@ -407,3 +408,163 @@ class GUIRenderer:
                 draw_horizontal_line(pixels, listbox.x + 1, line_y,
                                     listbox.width - 2,
                                     COLOR_INDICES["window_border"])
+
+    def _render_image_display(self, pixels: List[List[int]], img_display: ImageDisplay) -> None:
+        """Render an image display component with zoom support."""
+        # Background
+        fill_rect(pixels, img_display.x, img_display.y,
+                 img_display.width, img_display.height,
+                 COLOR_INDICES["list_bg"])
+
+        # Border
+        draw_rect_border(pixels, img_display.x, img_display.y,
+                        img_display.width, img_display.height,
+                        COLOR_INDICES["list_border"])
+
+        # Get image data
+        image_data = img_display.image_data
+        if not image_data:
+            # No image loaded - draw placeholder text
+            text = "NO IMAGE"
+            text_width = get_text_width(text, self.scale, False)
+            text_x = img_display.x + (img_display.width - text_width) // 2
+            text_y = img_display.y + (img_display.height - FONT_HEIGHT * self.scale) // 2
+            draw_text(pixels, text_x, text_y, text,
+                     COLOR_INDICES["text_dim"], self.scale, False)
+            return
+
+        # Build indexed data cache if not present
+        if img_display.indexed_data is None:
+            self._build_indexed_cache(img_display)
+
+        indexed_data = img_display.indexed_data
+        zoom_factor = img_display.zoom_factor
+        src_width = img_display.image_width
+        src_height = img_display.image_height
+
+        # Calculate displayed size after zoom
+        display_width = int(src_width * zoom_factor)
+        display_height = int(src_height * zoom_factor)
+
+        # Calculate content area (inside border)
+        content_x = img_display.x + 1
+        content_y = img_display.y + 1
+        content_width = img_display.width - 2
+        content_height = img_display.height - 2 - 12  # Leave room for zoom label
+
+        # Center the image in the content area
+        start_x = content_x + (content_width - display_width) // 2
+        start_y = content_y + (content_height - display_height) // 2
+
+        # Render the image with zoom using cached indexed data
+        self._blit_indexed_zoomed(
+            pixels, indexed_data,
+            start_x, start_y,
+            content_x, content_y,
+            content_width, content_height,
+            zoom_factor
+        )
+
+        # Draw zoom level label at the bottom
+        if zoom_factor >= 1:
+            zoom_text = f"{int(zoom_factor)}X"
+        else:
+            zoom_text = f"1/{int(1/zoom_factor)}X"
+        text_width = get_text_width(zoom_text, self.scale, False)
+        text_x = img_display.x + (img_display.width - text_width) // 2
+        text_y = img_display.y + img_display.height - 11
+        draw_text(pixels, text_x, text_y, zoom_text,
+                 COLOR_INDICES["text"], self.scale, False)
+
+    def _build_indexed_cache(self, img_display: ImageDisplay) -> None:
+        """Build palette-indexed cache for an image."""
+        image_data = img_display.image_data
+        if not image_data:
+            return
+
+        indexed = []
+        for row in image_data:
+            indexed_row = []
+            for r, g, b in row:
+                indexed_row.append(self._find_closest_color(r, g, b))
+            indexed.append(indexed_row)
+        img_display.indexed_data = indexed
+
+    def _blit_indexed_zoomed(
+        self,
+        pixels: List[List[int]],
+        indexed_data: List[List[int]],
+        start_x: int, start_y: int,
+        clip_x: int, clip_y: int,
+        clip_width: int, clip_height: int,
+        zoom_factor: float
+    ) -> None:
+        """Blit indexed image data to pixel buffer with zoom and clipping."""
+        src_height = len(indexed_data)
+        src_width = len(indexed_data[0]) if src_height > 0 else 0
+        buf_height = len(pixels)
+        buf_width = len(pixels[0]) if buf_height > 0 else 0
+
+        # Clipping bounds
+        clip_x2 = clip_x + clip_width
+        clip_y2 = clip_y + clip_height
+
+        if zoom_factor >= 1:
+            # Zoom in: each source pixel becomes multiple destination pixels
+            scale = int(zoom_factor)
+            for src_y in range(src_height):
+                for src_x in range(src_width):
+                    color_idx = indexed_data[src_y][src_x]
+
+                    # Draw scaled pixel
+                    for dy in range(scale):
+                        for dx in range(scale):
+                            dst_x = start_x + src_x * scale + dx
+                            dst_y = start_y + src_y * scale + dy
+
+                            # Clip to content area and buffer
+                            if (clip_x <= dst_x < clip_x2 and
+                                clip_y <= dst_y < clip_y2 and
+                                0 <= dst_x < buf_width and
+                                0 <= dst_y < buf_height):
+                                pixels[dst_y][dst_x] = color_idx
+        else:
+            # Zoom out: sample source pixels
+            scale = int(1 / zoom_factor)
+            display_width = src_width // scale
+            display_height = src_height // scale
+
+            for dst_y_off in range(display_height):
+                for dst_x_off in range(display_width):
+                    # Sample from source (use top-left pixel of each block)
+                    src_x = dst_x_off * scale
+                    src_y = dst_y_off * scale
+
+                    if src_y < src_height and src_x < src_width:
+                        color_idx = indexed_data[src_y][src_x]
+
+                        dst_x = start_x + dst_x_off
+                        dst_y = start_y + dst_y_off
+
+                        # Clip to content area and buffer
+                        if (clip_x <= dst_x < clip_x2 and
+                            clip_y <= dst_y < clip_y2 and
+                            0 <= dst_x < buf_width and
+                            0 <= dst_y < buf_height):
+                            pixels[dst_y][dst_x] = color_idx
+
+    def _find_closest_color(self, r: int, g: int, b: int) -> int:
+        """Find the closest color index in the palette for an RGB value."""
+        from sixel import COLORS, COLOR_INDICES
+
+        best_idx = 0
+        best_dist = float('inf')
+
+        for name, (pr, pg, pb) in COLORS.items():
+            # Simple Euclidean distance in RGB space
+            dist = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = COLOR_INDICES[name]
+
+        return best_idx

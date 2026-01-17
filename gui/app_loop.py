@@ -18,7 +18,7 @@ import threading
 from queue import Queue, Empty
 from typing import Optional, Callable
 
-from gui import GUIState, TextInput, Button, ComponentState
+from gui import GUIState, TextInput
 from renderer import GUIRenderer
 from terminals import Terminal, KeyEvent, InputEvent
 
@@ -247,19 +247,6 @@ def run_app_loop(
                 if needs_render:
                     render_frame()
                     last_time = current_time
-
-                # Reset any buttons from PRESSED back to FOCUSED after a brief delay
-                for window in gui_state.windows:
-                    for component in window.components:
-                        if isinstance(component, Button):
-                            if component.state == ComponentState.PRESSED:
-                                # Keep pressed state for multiple frames for visibility
-                                if not hasattr(component, '_press_frames'):
-                                    component._press_frames = 0
-                                component._press_frames += 1
-                                if component._press_frames >= 3:  # ~50ms at 60fps
-                                    component.state = ComponentState.FOCUSED
-                                    component._press_frames = 0
 
                 # Small sleep to prevent CPU spinning
                 time.sleep(0.016)  # ~60 FPS max
