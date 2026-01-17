@@ -2,6 +2,8 @@
 
 A terminal-based system monitor rendered entirely using Sixel graphics. Displays real-time system metrics with updating graphs, similar to Activity Monitor or Task Manager.
 
+![Sixtop Screenshot](demo/screenshot.png)
+
 ## Features
 
 - **Five metric views** with real-time updating graphs:
