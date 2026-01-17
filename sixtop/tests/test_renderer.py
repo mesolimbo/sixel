@@ -59,8 +59,8 @@ class TestRendererInit:
     def test_default_initialization(self):
         """Test renderer initializes with default values."""
         renderer = MetricsRenderer()
-        assert renderer.width == 580
-        assert renderer.height == 84
+        assert renderer.width == 820
+        assert renderer.height == 156
         assert renderer.scale == 2  # Bold text scale
 
     def test_custom_dimensions(self):
