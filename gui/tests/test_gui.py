@@ -83,21 +83,21 @@ class TestButton:
         assert btn.width == 100
         assert btn.height == 30
         assert btn.label == "TEST"
-        assert btn.click_count == 0
+        assert btn.toggled is False
 
-    def test_button_click_increments_count(self):
-        """Test that clicking a button increments the count."""
+    def test_button_click_toggles(self):
+        """Test that clicking a button toggles its state."""
         btn = Button(10, 20, 100, 30, "TEST")
         btn.on_click(50, 35)
-        assert btn.click_count == 1
+        assert btn.toggled is True
         btn.on_click(50, 35)
-        assert btn.click_count == 2
+        assert btn.toggled is False
 
     def test_button_click_outside_ignored(self):
         """Test that clicking outside the button is ignored."""
         btn = Button(10, 20, 100, 30, "TEST")
         btn.on_click(5, 35)  # Outside left
-        assert btn.click_count == 0
+        assert btn.toggled is False
 
     def test_button_click_callback(self):
         """Test button click callback."""
@@ -115,7 +115,7 @@ class TestButton:
         btn = Button(10, 20, 100, 30, "TEST")
         btn.enabled = False
         btn.on_click(50, 35)
-        assert btn.click_count == 0
+        assert btn.toggled is False
 
     def test_button_state_disabled(self):
         """Test button state when disabled."""
@@ -469,7 +469,7 @@ class TestGUIState:
 
         component = gui.handle_click(50, 45)
         assert component is btn
-        assert btn.click_count == 1
+        assert btn.toggled is True
 
     def test_gui_state_handle_key(self):
         """Test handling key input for focused component."""

@@ -114,7 +114,7 @@ class TestFullGUIRendering:
         assert frame.endswith(SIXEL_END)
 
         # Verify state changes
-        assert btn.click_count > 0
+        assert btn.toggled is True
         assert cb.checked is True
 
     def test_render_focused_text_input(self):
