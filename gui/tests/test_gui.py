@@ -33,6 +33,7 @@ from gui import (
     ProgressBar,
     ListBox,
     ListItem,
+    ImageDisplay,
     Window,
     GUIState,
 )
@@ -486,3 +487,167 @@ class TestGUIState:
         # Type a character
         gui.handle_key('A')
         assert ti.text == "A"
+
+
+class TestImageDisplay:
+    """Tests for the ImageDisplay component."""
+
+    def test_image_display_creation(self):
+        """Test creating an image display without an image."""
+        img = ImageDisplay(10, 20, 100, 80)
+        assert img.x == 10
+        assert img.y == 20
+        assert img.width == 100
+        assert img.height == 80
+        assert img.zoom_level == 0
+        assert img.zoom_factor == 1.0
+        assert img.image_data is None
+        assert img.indexed_data is None
+
+    def test_image_display_with_image(self):
+        """Test creating an image display with a valid image."""
+        image_path = Path(__file__).parent.parent / "demo" / "squirel.png"
+        img = ImageDisplay(10, 20, 100, 80, image_path=str(image_path))
+        assert img.image_data is not None
+        assert img.image_width == 256
+        assert img.image_height == 256
+
+    def test_image_display_zoom_in(self):
+        """Test zooming in."""
+        img = ImageDisplay(10, 20, 100, 80)
+        assert img.zoom_level == 0
+        assert img.zoom_factor == 1.0
+
+        result = img.zoom_in()
+        assert result is True
+        assert img.zoom_level == 1
+        assert img.zoom_factor == 2.0
+
+        img.zoom_in()
+        assert img.zoom_level == 2
+        assert img.zoom_factor == 4.0
+
+    def test_image_display_zoom_out(self):
+        """Test zooming out."""
+        img = ImageDisplay(10, 20, 100, 80)
+
+        result = img.zoom_out()
+        assert result is True
+        assert img.zoom_level == -1
+        assert img.zoom_factor == 0.5
+
+        img.zoom_out()
+        assert img.zoom_level == -2
+        assert img.zoom_factor == 0.25
+
+    def test_image_display_zoom_limits(self):
+        """Test zoom limits."""
+        img = ImageDisplay(10, 20, 100, 80)
+
+        # Zoom out to minimum
+        for _ in range(10):
+            img.zoom_out()
+        assert img.zoom_level == ImageDisplay.MIN_ZOOM_LEVEL
+
+        # Try to zoom out past minimum
+        result = img.zoom_out()
+        assert result is False
+        assert img.zoom_level == ImageDisplay.MIN_ZOOM_LEVEL
+
+        # Reset and zoom in to maximum
+        img._zoom_level = 0
+        for _ in range(10):
+            img.zoom_in()
+        assert img.zoom_level == ImageDisplay.MAX_ZOOM_LEVEL
+
+        # Try to zoom in past maximum
+        result = img.zoom_in()
+        assert result is False
+        assert img.zoom_level == ImageDisplay.MAX_ZOOM_LEVEL
+
+    def test_image_display_zoom_callback(self):
+        """Test zoom callback is called."""
+        zoom_levels = []
+
+        def on_zoom(level):
+            zoom_levels.append(level)
+
+        img = ImageDisplay(10, 20, 100, 80, on_zoom=on_zoom)
+        img.zoom_in()
+        img.zoom_in()
+        img.zoom_out()
+
+        assert zoom_levels == [1, 2, 1]
+
+    def test_image_display_on_click(self):
+        """Test that on_click does nothing (image display is not clickable)."""
+        img = ImageDisplay(10, 20, 100, 80)
+        # Should not raise
+        img.on_click(50, 50)
+
+    def test_image_display_indexed_data_setter(self):
+        """Test setting indexed data cache."""
+        img = ImageDisplay(10, 20, 100, 80)
+        assert img.indexed_data is None
+
+        test_data = [[1, 2], [3, 4]]
+        img.indexed_data = test_data
+        assert img.indexed_data == test_data
+
+    def test_image_display_invalid_path(self):
+        """Test creating an image display with invalid path."""
+        img = ImageDisplay(10, 20, 100, 80, image_path="/nonexistent/path.png")
+        assert img.image_data is None
+        assert img.image_width == 0
+        assert img.image_height == 0
+
+    def test_image_display_image_path_property(self):
+        """Test image_path property."""
+        img = ImageDisplay(10, 20, 100, 80, image_path="/some/path.png")
+        assert img.image_path == "/some/path.png"
+
+
+class TestGUIStateImageDisplay:
+    """Tests for GUIState with ImageDisplay component."""
+
+    def test_handle_special_key_image_display_zoom_in(self):
+        """Test arrow keys zoom in on ImageDisplay."""
+        gui = GUIState()
+        w = Window(title="Test", x=0, y=0, width=200, height=150)
+        img = ImageDisplay(10, 30, 100, 80)
+        w.add_component(img)
+        gui.add_window(w)
+
+        # Focus the image display
+        gui.focus_next()
+
+        # Up arrow should zoom in
+        result = gui.handle_special_key('up')
+        assert result is True
+        assert img.zoom_level == 1
+
+        # Right arrow should also zoom in
+        result = gui.handle_special_key('right')
+        assert result is True
+        assert img.zoom_level == 2
+
+    def test_handle_special_key_image_display_zoom_out(self):
+        """Test arrow keys zoom out on ImageDisplay."""
+        gui = GUIState()
+        w = Window(title="Test", x=0, y=0, width=200, height=150)
+        img = ImageDisplay(10, 30, 100, 80)
+        w.add_component(img)
+        gui.add_window(w)
+
+        # Focus the image display
+        gui.focus_next()
+
+        # Down arrow should zoom out
+        result = gui.handle_special_key('down')
+        assert result is True
+        assert img.zoom_level == -1
+
+        # Left arrow should also zoom out
+        result = gui.handle_special_key('left')
+        assert result is True
+        assert img.zoom_level == -2
