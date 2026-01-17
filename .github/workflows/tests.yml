@@ -14,6 +14,7 @@ jobs:
     outputs:
       snake: ${{ steps.filter.outputs.snake }}
       sixtop: ${{ steps.filter.outputs.sixtop }}
+      gui: ${{ steps.filter.outputs.gui }}
     steps:
       - uses: actions/checkout@v4
 
@@ -26,6 +27,9 @@ jobs:
               - '.github/workflows/tests.yml'
             sixtop:
               - 'sixtop/**'
+              - '.github/workflows/tests.yml'
+            gui:
+              - 'gui/**'
               - '.github/workflows/tests.yml'
 
   snake-unit:
@@ -62,6 +66,32 @@ jobs:
     defaults:
       run:
         working-directory: sixtop
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install pipenv
+        run: pip install pipenv
+
+      - name: Install dependencies
+        run: pipenv install --dev
+
+      - name: Run unit tests
+        run: pipenv run make unit
+
+  gui-unit:
+    name: GUI Unit Tests
+    needs: detect-changes
+    if: needs.detect-changes.outputs.gui == 'true' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: gui
 
     steps:
       - uses: actions/checkout@v4
