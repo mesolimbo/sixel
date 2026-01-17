@@ -129,7 +129,7 @@ class TestProcessKeyEvent:
         assert gui.get_focused_window() is window1
 
     def test_space_activates_button(self):
-        """Test space key activates focused button."""
+        """Test space key toggles focused button."""
         gui = GUIState()
         window = Window(title="TEST", x=0, y=0, width=200, height=100)
         btn = Button(10, 30, 80, 25, "CLICK")
@@ -144,7 +144,7 @@ class TestProcessKeyEvent:
         should_continue, needs_render = process_key_event(key, gui)
         assert should_continue is True
         assert needs_render is True
-        assert btn.click_count == 1
+        assert btn.toggled is True
 
     def test_space_toggles_checkbox(self):
         """Test space key toggles focused checkbox."""
