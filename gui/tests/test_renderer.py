@@ -26,6 +26,7 @@ from gui import (
     Slider,
     ProgressBar,
     ListBox,
+    ImageDisplay,
 )
 from sixel import SIXEL_START, SIXEL_END
 
@@ -169,6 +170,57 @@ class TestComponentRendering:
         gui = GUIState()
         window = Window(title="TEST", x=0, y=0, width=200, height=150)
         window.add_component(ListBox(10, 30, 100, 80, items=["A", "B", "C"]))
+        gui.add_window(window)
+
+        frame = renderer.render_frame(gui)
+        assert frame.startswith(SIXEL_START)
+
+    def test_render_image_display_no_image(self):
+        """Test rendering an image display without an image."""
+        renderer = GUIRenderer(width=200, height=150)
+        gui = GUIState()
+        window = Window(title="TEST", x=0, y=0, width=200, height=150)
+        window.add_component(ImageDisplay(10, 30, 100, 80))
+        gui.add_window(window)
+
+        frame = renderer.render_frame(gui)
+        assert frame.startswith(SIXEL_START)
+
+    def test_render_image_display_with_image(self):
+        """Test rendering an image display with an image."""
+        renderer = GUIRenderer(width=200, height=150)
+        gui = GUIState()
+        window = Window(title="TEST", x=0, y=0, width=200, height=150)
+        image_path = Path(__file__).parent.parent / "demo" / "squirel.png"
+        window.add_component(ImageDisplay(10, 30, 140, 100, image_path=str(image_path)))
+        gui.add_window(window)
+
+        frame = renderer.render_frame(gui)
+        assert frame.startswith(SIXEL_START)
+
+    def test_render_image_display_zoomed_in(self):
+        """Test rendering an image display zoomed in."""
+        renderer = GUIRenderer(width=200, height=150)
+        gui = GUIState()
+        window = Window(title="TEST", x=0, y=0, width=200, height=150)
+        image_path = Path(__file__).parent.parent / "demo" / "squirel.png"
+        img = ImageDisplay(10, 30, 140, 100, image_path=str(image_path))
+        img.zoom_in()  # 2x zoom
+        window.add_component(img)
+        gui.add_window(window)
+
+        frame = renderer.render_frame(gui)
+        assert frame.startswith(SIXEL_START)
+
+    def test_render_image_display_zoomed_out(self):
+        """Test rendering an image display zoomed out."""
+        renderer = GUIRenderer(width=200, height=150)
+        gui = GUIState()
+        window = Window(title="TEST", x=0, y=0, width=200, height=150)
+        image_path = Path(__file__).parent.parent / "demo" / "squirel.png"
+        img = ImageDisplay(10, 30, 140, 100, image_path=str(image_path))
+        img.zoom_out()  # 0.5x zoom
+        window.add_component(img)
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)

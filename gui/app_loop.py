@@ -29,7 +29,7 @@ RESTORE_CURSOR = "\x1b[u"
 MOVE_UP = "\x1b[{}A"
 
 
-class InputThread(threading.Thread):
+class InputThread(threading.Thread):  # pragma: no cover
     """
     Background thread for reading keyboard input.
 
@@ -158,7 +158,7 @@ def process_key_event(event: KeyEvent, gui_state: GUIState) -> tuple[bool, bool]
     return True, False
 
 
-def run_app_loop(
+def run_app_loop(  # pragma: no cover
     gui_state: GUIState,
     renderer: GUIRenderer,
     terminal: Terminal,
