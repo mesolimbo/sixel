@@ -319,15 +319,13 @@ class Terminal(ABC):
         self.flush()
 
     def __enter__(self) -> "Terminal":
-        """Context manager entry - enters raw mode and enables mouse."""
+        """Context manager entry - enters raw mode and hides cursor."""
         self.enter_raw_mode()
         self.hide_cursor()
-        self.enable_mouse()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Context manager exit - restores terminal state."""
-        self.disable_mouse()
         self.show_cursor()
         self.exit_raw_mode()
         self.write("\n")

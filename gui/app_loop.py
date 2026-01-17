@@ -1,19 +1,26 @@
 """
 Application loop module for GUI demo.
 
-Handles the main loop, input processing (keyboard and mouse),
+Handles the main loop, keyboard input processing,
 and coordination between the terminal, renderer, and GUI state.
+
+Navigation:
+- Tab: Move focus to next component
+- Shift+Tab (or Backtab): Move focus to previous component
+- Arrow keys: Interact with focused component (sliders, radio buttons, lists)
+- Space/Enter: Activate focused component (buttons, checkboxes)
+- Text input: Type in focused text fields
+- q: Quit (when not in a text field)
 """
 
 import time
 import threading
 from queue import Queue, Empty
-from typing import Optional, Callable, Union
+from typing import Optional, Callable
 
-from gui import GUIState, ProgressBar
+from gui import GUIState, TextInput, Button, ComponentState
 from renderer import GUIRenderer
-from terminals import Terminal, KeyEvent, MouseEvent, InputEvent
-from terminals.base import MouseButton, MouseEventType
+from terminals import Terminal, KeyEvent, InputEvent
 
 
 # ANSI escape codes
@@ -24,7 +31,7 @@ MOVE_UP = "\x1b[{}A"
 
 class InputThread(threading.Thread):
     """
-    Background thread for reading keyboard and mouse input.
+    Background thread for reading keyboard input.
 
     Reads events continuously and puts them in a queue for the main thread.
     """
@@ -52,8 +59,7 @@ class InputThread(threading.Thread):
 
 def process_input(
     event: Optional[InputEvent],
-    gui_state: GUIState,
-    renderer: GUIRenderer
+    gui_state: GUIState
 ) -> tuple[bool, bool]:
     """
     Process an input event and update application state.
@@ -61,7 +67,6 @@ def process_input(
     Args:
         event: The input event to process (or None if no input)
         gui_state: The GUI state to update
-        renderer: The renderer (for coordinate translation)
 
     Returns:
         Tuple of (should_continue, needs_render)
@@ -73,70 +78,82 @@ def process_input(
     if isinstance(event, KeyEvent):
         return process_key_event(event, gui_state)
 
-    # Handle mouse events
-    if isinstance(event, MouseEvent):
-        return process_mouse_event(event, gui_state, renderer)
-
     return True, False
 
 
 def process_key_event(event: KeyEvent, gui_state: GUIState) -> tuple[bool, bool]:
-    """Process a keyboard event."""
-    # Check for quit
-    if event.is_quit:
-        return False, False
+    """
+    Process a keyboard event for navigation and interaction.
 
-    # Handle regular character input
-    if event.key_type.value == 'character':
-        if gui_state.handle_key(event.value):
-            return True, True
+    Returns:
+        Tuple of (should_continue, needs_render)
+    """
+    focused = gui_state.get_focused_component()
+
+    # Check if focused component is a text input
+    is_text_input = isinstance(focused, TextInput) if focused else False
 
     # Handle special keys
     if event.key_type.value == 'special':
-        if event.value == 'backspace':
+        key = event.value
+
+        # Quit on 'q' or Ctrl-C (but not when in text input)
+        if key == 'ctrl-c':
+            return False, False
+
+        # Tab navigation
+        if key == 'tab':
+            gui_state.focus_next()
+            return True, True
+
+        # Enter/Space to activate
+        if key in ('enter', 'space') and not is_text_input:
+            if focused:
+                gui_state.activate_focused()
+            return True, True
+
+        # Backspace for text input
+        if key == 'backspace' and is_text_input:
             if gui_state.handle_special_key('backspace'):
                 return True, True
-        elif event.value == 'tab':
-            # Could implement tab navigation between components
-            pass
-        elif event.value == 'enter':
-            # Could trigger button clicks or form submission
-            pass
+
+        # Enter in text field moves to next
+        if key == 'enter' and is_text_input:
+            gui_state.focus_next()
+            return True, True
+
+        # Escape to unfocus text input
+        if key == 'escape' and is_text_input:
+            gui_state.clear_focus()
+            return True, True
 
     # Handle arrow keys
     if event.key_type.value == 'arrow':
-        if gui_state.handle_special_key(event.value):
+        direction = event.value
+        if gui_state.handle_special_key(direction):
+            return True, True
+        return True, False
+
+    # Handle character input
+    if event.key_type.value == 'character':
+        char = event.value
+
+        # 'q' to quit (but not when in text input)
+        if char == 'q' and not is_text_input:
+            return False, False
+
+        # Space to activate (but not when in text input)
+        if char == ' ' and not is_text_input:
+            if focused:
+                gui_state.activate_focused()
             return True, True
 
-    return True, False
+        # Type in text input
+        if is_text_input:
+            if gui_state.handle_key(char):
+                return True, True
 
-
-def process_mouse_event(
-    event: MouseEvent,
-    gui_state: GUIState,
-    renderer: GUIRenderer
-) -> tuple[bool, bool]:
-    """
-    Process a mouse event.
-
-    Note: Mouse coordinates from the terminal are in character cells.
-    We need to convert to pixel coordinates for the sixel graphics.
-    Each character cell is approximately 6 pixels wide and 6 pixels tall
-    (sixel uses 6 vertical pixels per row).
-    """
-    # Convert character cell coordinates to approximate pixel coordinates
-    # These values may need adjustment based on terminal font
-    cell_width = 10  # Approximate pixels per character cell width
-    cell_height = 20  # Approximate pixels per character cell height
-
-    # Account for the reserved space at the top (see run_app_loop)
-    px = event.x * cell_width
-    py = event.y * cell_height
-
-    if event.event_type == MouseEventType.PRESS:
-        if event.button == MouseButton.LEFT:
-            component = gui_state.handle_click(px, py)
-            return True, True  # Always re-render on click
+        return True, False
 
     return True, False
 
@@ -152,7 +169,7 @@ def run_app_loop(
     Run the main application loop.
 
     Uses a separate thread for input handling to ensure responsiveness.
-    Supports both keyboard and mouse input.
+    Keyboard-only navigation (no mouse).
 
     Args:
         gui_state: The GUI state to manage
@@ -164,7 +181,7 @@ def run_app_loop(
     event_queue: Queue[InputEvent] = Queue()
     input_thread = None
 
-    # Calculate sixel rows
+    # Calculate sixel rows for spacing
     sixel_rows = (renderer.height + 5) // 6
 
     def render_frame():
@@ -179,11 +196,14 @@ def run_app_loop(
         with terminal:
             # Reserve space for rendering
             _, term_height = terminal.get_size()
-            rows_to_reserve = min(sixel_rows + 1, max(8, term_height // 3))
+            rows_to_reserve = min(sixel_rows + 2, max(10, term_height // 3))
             terminal.write("\n" * rows_to_reserve)
             terminal.write(MOVE_UP.format(rows_to_reserve))
             terminal.write(SAVE_CURSOR)
             terminal.flush()
+
+            # Focus the first focusable component
+            gui_state.focus_next()
 
             # Start input thread
             input_thread = InputThread(terminal, event_queue)
@@ -205,7 +225,7 @@ def run_app_loop(
                     try:
                         event = event_queue.get_nowait()
                         should_continue, event_needs_render = process_input(
-                            event, gui_state, renderer
+                            event, gui_state
                         )
                         if not should_continue:
                             running = False
@@ -227,6 +247,19 @@ def run_app_loop(
                 if needs_render:
                     render_frame()
                     last_time = current_time
+
+                # Reset any buttons from PRESSED back to FOCUSED after a brief delay
+                for window in gui_state.windows:
+                    for component in window.components:
+                        if isinstance(component, Button):
+                            if component.state == ComponentState.PRESSED:
+                                # Keep pressed state for multiple frames for visibility
+                                if not hasattr(component, '_press_frames'):
+                                    component._press_frames = 0
+                                component._press_frames += 1
+                                if component._press_frames >= 3:  # ~50ms at 60fps
+                                    component.state = ComponentState.FOCUSED
+                                    component._press_frames = 0
 
                 # Small sleep to prevent CPU spinning
                 time.sleep(0.016)  # ~60 FPS max

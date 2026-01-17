@@ -267,6 +267,16 @@ class UnixTerminal(Terminal):
         size = shutil.get_terminal_size()
         return size.columns, size.lines
 
+    def get_cursor_position(self) -> Optional[Tuple[int, int]]:
+        """
+        Get current cursor position as (column, row).
+
+        Note: On Unix with ANSI mouse tracking, coordinates are typically
+        relative to the visible window, so we return None to indicate
+        no offset adjustment is needed.
+        """
+        return None
+
     def hide_cursor(self) -> None:
         """Hide the terminal cursor."""
         self.write(self.CURSOR_HIDE)
