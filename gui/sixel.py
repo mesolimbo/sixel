@@ -446,22 +446,34 @@ def draw_progress_bar(
     bg_color: int,
     fill_color: int,
     border_color: Optional[int] = None,
-    max_value: float = 100.0
+    max_value: float = 100.0,
+    radius: int = 3
 ) -> None:
-    """Draw a progress bar."""
+    """Draw a progress bar with rounded corners."""
     value = max(0, min(value, max_value))
 
-    # Background
-    fill_rect(pixels, x, y, w, h, bg_color)
+    # Background with rounded corners
+    draw_rounded_rect_filled(pixels, x, y, w, h, radius, bg_color)
 
-    # Fill
+    # Fill with rounded corners
     fill_width = int((value / max_value) * w)
     if fill_width > 0:
-        fill_rect(pixels, x, y, fill_width, h, fill_color)
+        # Use rounded corners if there's enough width, otherwise square
+        if fill_width >= 2 * radius:
+            draw_rounded_rect_filled(pixels, x, y, fill_width, h, radius, fill_color)
+        else:
+            fill_rect(pixels, x + radius, y, fill_width, h, fill_color)
+            # Fill the left rounded corner area
+            for cy in range(radius):
+                for cx in range(radius):
+                    dist_sq = (radius - cx - 0.5) ** 2 + (radius - cy - 0.5) ** 2
+                    if dist_sq <= radius ** 2:
+                        set_pixel(pixels, x + cx, y + cy, fill_color)
+                        set_pixel(pixels, x + cx, y + h - 1 - cy, fill_color)
 
-    # Border
+    # Border with rounded corners
     if border_color is not None:
-        draw_rect_border(pixels, x, y, w, h, border_color)
+        draw_rounded_rect_border(pixels, x, y, w, h, radius, border_color)
 
 
 def draw_slider(
@@ -473,7 +485,8 @@ def draw_slider(
     fill_color: int,
     thumb_color: int,
     thumb_width: int = 8,
-    max_value: float = 100.0
+    max_value: float = 100.0,
+    thumb_radius: int = 3
 ) -> int:
     """
     Draw a slider control.
@@ -495,8 +508,8 @@ def draw_slider(
     # Thumb position
     thumb_x = x + int((value / max_value) * (w - thumb_width))
 
-    # Draw thumb
-    fill_rect(pixels, thumb_x, y, thumb_width, h, thumb_color)
+    # Draw thumb with rounded corners
+    draw_rounded_rect_filled(pixels, thumb_x, y, thumb_width, h, thumb_radius, thumb_color)
 
     return thumb_x + thumb_width // 2
 
