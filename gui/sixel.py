@@ -86,6 +86,48 @@ COLORS = {
 
 COLOR_INDICES = {name: idx for idx, name in enumerate(COLORS.keys())}
 
+# Dynamic image colors - maps RGB tuples to color indices
+# These are colors extracted from loaded images that extend the palette
+_IMAGE_COLORS: Dict[Tuple[int, int, int], int] = {}
+_NEXT_IMAGE_COLOR_INDEX = len(COLORS)
+
+
+def register_image_colors(colors: List[Tuple[int, int, int]]) -> Dict[Tuple[int, int, int], int]:
+    """
+    Register image colors in the dynamic palette.
+
+    Args:
+        colors: List of RGB tuples to register
+
+    Returns:
+        Dictionary mapping RGB tuples to their palette indices
+    """
+    global _NEXT_IMAGE_COLOR_INDEX
+
+    color_map = {}
+    for rgb in colors:
+        if rgb in _IMAGE_COLORS:
+            color_map[rgb] = _IMAGE_COLORS[rgb]
+        else:
+            _IMAGE_COLORS[rgb] = _NEXT_IMAGE_COLOR_INDEX
+            color_map[rgb] = _NEXT_IMAGE_COLOR_INDEX
+            _NEXT_IMAGE_COLOR_INDEX += 1
+
+    return color_map
+
+
+def get_image_color_index(rgb: Tuple[int, int, int]) -> Optional[int]:
+    """Get the palette index for a registered image color."""
+    return _IMAGE_COLORS.get(rgb)
+
+
+def clear_image_colors() -> None:
+    """Clear all registered image colors (useful for testing)."""
+    global _NEXT_IMAGE_COLOR_INDEX
+    _IMAGE_COLORS.clear()
+    _NEXT_IMAGE_COLOR_INDEX = len(COLORS)
+
+
 # Simple 5x7 bitmap font
 FONT = {
     ' ': [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
@@ -155,12 +197,19 @@ def rgb_to_sixel_color(r: int, g: int, b: int) -> Tuple[int, int, int]:
 
 
 def generate_palette() -> str:
-    """Generate the sixel color palette definitions."""
+    """Generate the sixel color palette definitions including dynamic image colors."""
     palette = []
+    # Add UI colors
     for name, (r, g, b) in COLORS.items():
         idx = COLOR_INDICES[name]
         sr, sg, sb = rgb_to_sixel_color(r, g, b)
         palette.append(f"#{idx};2;{sr};{sg};{sb}")
+
+    # Add dynamic image colors
+    for (r, g, b), idx in _IMAGE_COLORS.items():
+        sr, sg, sb = rgb_to_sixel_color(r, g, b)
+        palette.append(f"#{idx};2;{sr};{sg};{sb}")
+
     return "".join(palette)
 
 
