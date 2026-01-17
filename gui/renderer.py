@@ -98,8 +98,27 @@ class GUIRenderer:
         x = self.padding
 
         # Instructions
-        text = "CLICK TO INTERACT  |  Q=QUIT"
+        text = "TAB=WINDOW  UP/DOWN=ITEM  LEFT/RIGHT=ADJUST  SPACE=SELECT  Q=QUIT"
         draw_text(pixels, x, y, text, COLOR_INDICES["text_dim"], self.scale, False)
+
+    def _draw_focus_indicator(
+        self, pixels: List[List[int]], component: Component
+    ) -> None:
+        """Draw a focus indicator border around a focused component."""
+        if component.state != ComponentState.FOCUSED:
+            return
+
+        b = component.bounds
+        # Draw a highlight border 2 pixels outside the component
+        focus_color = COLOR_INDICES["input_focus"]
+
+        # Draw outer border (2 pixels thick)
+        for offset in range(2):
+            x = b.x - 2 + offset
+            y = b.y - 2 + offset
+            w = b.width + 4 - offset * 2
+            h = b.height + 4 - offset * 2
+            draw_rect_border(pixels, x, y, w, h, focus_color)
 
     def _render_window(self, pixels: List[List[int]], window: Window) -> None:
         """Render a window and its components."""
@@ -129,6 +148,9 @@ class GUIRenderer:
 
     def _render_component(self, pixels: List[List[int]], component: Component) -> None:
         """Dispatch to the appropriate component renderer."""
+        # Draw focus indicator first (behind component)
+        self._draw_focus_indicator(pixels, component)
+
         if isinstance(component, Button):
             self._render_button(pixels, component)
         elif isinstance(component, Checkbox):

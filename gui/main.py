@@ -304,36 +304,48 @@ def create_demo_gui() -> GUIState:
     return gui
 
 
-def create_animation_callback(gui: GUIState):
-    """Create an animation callback for the progress bars."""
-    last_update = [time.time()]
-    progress_values = [100.0, 65.0, 25.0]
-    progress_directions = [1, 1, 1]
+def link_sliders_to_progress_bars(gui: GUIState):
+    """Link sliders to corresponding progress bars."""
+    # Window 5 (index 4) has sliders
+    # Window 6 (index 5) has progress bars
+    if len(gui.windows) <= 5:
+        return
 
-    def animate(delta_time: float) -> None:
-        current = time.time()
-        # Update every 100ms
-        if current - last_update[0] < 0.1:
-            return
+    slider_window = gui.windows[4]
+    progress_window = gui.windows[5]
 
-        last_update[0] = current
+    sliders = [c for c in slider_window.components if isinstance(c, Slider)]
+    progress_bars = [c for c in progress_window.components if isinstance(c, ProgressBar)]
 
-        # Find the progress window (6th window, index 5)
+    # Link each slider to corresponding progress bar
+    for i, (slider, progress) in enumerate(zip(sliders, progress_bars)):
+        # Set initial value
+        progress.value = slider.value
+
+        # Create callback to update progress bar when slider changes
+        def make_callback(pb):
+            def on_change(value):
+                pb.value = value
+            return on_change
+
+        slider._on_change = make_callback(progress)
+
+
+def create_sync_callback(gui: GUIState):
+    """Create a callback that syncs sliders to progress bars each frame."""
+    def sync(delta_time: float) -> None:
+        # Sync slider values to progress bars
         if len(gui.windows) > 5:
+            slider_window = gui.windows[4]
             progress_window = gui.windows[5]
-            for i, component in enumerate(progress_window.components):
-                if isinstance(component, ProgressBar) and i < 3:
-                    # Animate the progress bar
-                    progress_values[i] += progress_directions[i] * 2
-                    if progress_values[i] >= 100:
-                        progress_values[i] = 100
-                        progress_directions[i] = -1
-                    elif progress_values[i] <= 0:
-                        progress_values[i] = 0
-                        progress_directions[i] = 1
-                    component.value = progress_values[i]
 
-    return animate
+            sliders = [c for c in slider_window.components if isinstance(c, Slider)]
+            progress_bars = [c for c in progress_window.components if isinstance(c, ProgressBar)]
+
+            for slider, progress in zip(sliders, progress_bars):
+                progress.value = slider.value
+
+    return sync
 
 
 def main():
@@ -344,6 +356,9 @@ def main():
     # Create GUI state with demo components
     gui = create_demo_gui()
 
+    # Link sliders to progress bars
+    link_sliders_to_progress_bars(gui)
+
     # Calculate dimensions for 7 windows
     # Each window is 160px wide with 10px gap
     # Total: 7 * 160 + 6 * 10 + 20 (margins) = 1200
@@ -353,13 +368,14 @@ def main():
     # Create renderer
     renderer = GUIRenderer(width=width, height=height)
 
-    # Create animation callback
-    animate = create_animation_callback(gui)
+    # Create sync callback to update progress bars from sliders
+    sync_callback = create_sync_callback(gui)
 
+    # Print instructions
     print("GUI Demo - Sixel Interactive Components")
-    print("=" * 40)
-    print("Click on components to interact")
-    print("Press 'q' to quit")
+    print("=" * 50)
+    print("Tab: Next window | Up/Down: Select item | Left/Right: Adjust")
+    print("Space: Activate | q: Quit (when not in text field)")
     print()
 
     # Run the app loop
@@ -367,7 +383,7 @@ def main():
         gui_state=gui,
         renderer=renderer,
         terminal=terminal,
-        animation_callback=animate
+        animation_callback=sync_callback
     )
 
 

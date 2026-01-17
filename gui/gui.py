@@ -613,21 +613,229 @@ class GUIState:
     """
     Manages the overall GUI state including all windows and components.
 
-    This is the main entry point for GUI interaction.
+    Navigation model:
+    - Tab cycles between windows (top-level components)
+    - Arrow keys navigate within the focused window
+    - Space/Enter activates the selected item in the window
     """
 
     def __init__(self):
         self.windows: List[Window] = []
-        self._focused_component: Optional[Component] = None
-        self._active_window: Optional[Window] = None
+        self._focused_window_index: int = -1
+        self._component_index_per_window: dict = {}  # window -> index of selected component
 
     def add_window(self, window: Window) -> None:
         """Add a window to the GUI."""
         self.windows.append(window)
-        if self._active_window is None:
-            self._active_window = window
-            window.active = True
+        # Initialize component index for this window (select first interactive component)
+        self._component_index_per_window[id(window)] = 0
 
+    def _get_interactive_components(self, window: Window) -> List[Component]:
+        """Get list of interactive components in a window."""
+        return [c for c in window.components
+                if c.enabled and not isinstance(c, ProgressBar)]
+
+    def get_focused_window(self) -> Optional[Window]:
+        """Get the currently focused window."""
+        if 0 <= self._focused_window_index < len(self.windows):
+            return self.windows[self._focused_window_index]
+        return None
+
+    def get_focused_component(self) -> Optional[Component]:
+        """Get the currently focused component within the focused window."""
+        window = self.get_focused_window()
+        if not window:
+            return None
+        components = self._get_interactive_components(window)
+        if not components:
+            return None
+        idx = self._component_index_per_window.get(id(window), 0)
+        if 0 <= idx < len(components):
+            return components[idx]
+        return components[0] if components else None
+
+    def clear_focus(self) -> None:
+        """Remove focus from all components."""
+        for window in self.windows:
+            window.active = False
+            for component in window.components:
+                if component.state == ComponentState.FOCUSED:
+                    component.state = ComponentState.NORMAL
+
+    def _update_focus_visuals(self) -> None:
+        """Update visual focus indicators."""
+        # Clear all focus
+        for window in self.windows:
+            window.active = False
+            for component in window.components:
+                if component.state == ComponentState.FOCUSED:
+                    component.state = ComponentState.NORMAL
+                # Also blur TextInputs
+                if isinstance(component, TextInput) and component.has_focus:
+                    component.blur()
+
+        # Set focus on current window and component
+        window = self.get_focused_window()
+        if window:
+            window.active = True
+            component = self.get_focused_component()
+            if component:
+                component.state = ComponentState.FOCUSED
+                # Also focus TextInputs so they accept typing
+                if isinstance(component, TextInput):
+                    component.focus()
+
+    def focus_next(self) -> None:
+        """Move focus to the next window."""
+        if not self.windows:
+            return
+        self._focused_window_index = (self._focused_window_index + 1) % len(self.windows)
+        self._update_focus_visuals()
+
+    def focus_previous(self) -> None:
+        """Move focus to the previous window."""
+        if not self.windows:
+            return
+        self._focused_window_index = (self._focused_window_index - 1) % len(self.windows)
+        self._update_focus_visuals()
+
+    def activate_focused(self) -> bool:
+        """
+        Activate the currently focused component.
+
+        Returns True if a component was activated.
+        """
+        component = self.get_focused_component()
+        if not component:
+            return False
+
+        # Handle different component types
+        if isinstance(component, Button):
+            # Show pressed state briefly for visual feedback
+            component.state = ComponentState.PRESSED
+            component.on_click(0, 0)
+            # Note: state will be reset to FOCUSED on next input event
+            return True
+        elif isinstance(component, Checkbox):
+            component.toggle()
+            return True
+        elif isinstance(component, RadioButton):
+            component.select()
+            return True
+        elif isinstance(component, TextInput):
+            # Focus text input for typing
+            if hasattr(component, 'focus'):
+                component.focus()
+            return True
+        elif isinstance(component, ListBox):
+            return True
+
+        return False
+
+    def handle_key(self, key: str) -> bool:
+        """
+        Handle a key press (for text input).
+
+        Returns True if the key was handled.
+        """
+        component = self.get_focused_component()
+        if component and isinstance(component, TextInput):
+            if len(key) == 1 and key.isprintable():
+                component.insert_char(key)
+                return True
+        return False
+
+    def handle_special_key(self, key_name: str) -> bool:
+        """
+        Handle arrow keys and other special keys within the focused window.
+
+        Returns True if the key was handled.
+        """
+        window = self.get_focused_window()
+        if not window:
+            return False
+
+        component = self.get_focused_component()
+        components = self._get_interactive_components(window)
+
+        if not components:
+            return False
+
+        current_idx = self._component_index_per_window.get(id(window), 0)
+
+        # TextInput: handle backspace and left/right cursor movement
+        if isinstance(component, TextInput):
+            if key_name == 'backspace':
+                component.delete_char()
+                return True
+            elif key_name == 'left':
+                component.move_cursor_left()
+                return True
+            elif key_name == 'right':
+                component.move_cursor_right()
+                return True
+            elif key_name in ('up', 'down'):
+                # Move to prev/next component in window
+                if key_name == 'up' and current_idx > 0:
+                    self._component_index_per_window[id(window)] = current_idx - 1
+                    self._update_focus_visuals()
+                    return True
+                elif key_name == 'down' and current_idx < len(components) - 1:
+                    self._component_index_per_window[id(window)] = current_idx + 1
+                    self._update_focus_visuals()
+                    return True
+
+        # Slider: left/right to adjust value
+        elif isinstance(component, Slider):
+            if key_name == 'left':
+                step = (component.max_value - component.min_value) / 20
+                component.value = max(component.min_value, component.value - step)
+                return True
+            elif key_name == 'right':
+                step = (component.max_value - component.min_value) / 20
+                component.value = min(component.max_value, component.value + step)
+                return True
+            elif key_name in ('up', 'down'):
+                # Move to prev/next slider
+                if key_name == 'up' and current_idx > 0:
+                    self._component_index_per_window[id(window)] = current_idx - 1
+                    self._update_focus_visuals()
+                    return True
+                elif key_name == 'down' and current_idx < len(components) - 1:
+                    self._component_index_per_window[id(window)] = current_idx + 1
+                    self._update_focus_visuals()
+                    return True
+
+        # RadioButton, Checkbox, Button, ListBox: up/down to move between items
+        elif isinstance(component, (RadioButton, Checkbox, Button, ListBox)):
+            if key_name == 'up' and current_idx > 0:
+                self._component_index_per_window[id(window)] = current_idx - 1
+                self._update_focus_visuals()
+                # For radio buttons, also select the new one
+                new_component = components[current_idx - 1]
+                if isinstance(new_component, RadioButton):
+                    new_component.select()
+                return True
+            elif key_name == 'down' and current_idx < len(components) - 1:
+                self._component_index_per_window[id(window)] = current_idx + 1
+                self._update_focus_visuals()
+                # For radio buttons, also select the new one
+                new_component = components[current_idx + 1]
+                if isinstance(new_component, RadioButton):
+                    new_component.select()
+                return True
+            # ListBox also handles internal selection
+            if isinstance(component, ListBox):
+                if key_name == 'up' and component.selected_index > 0:
+                    component.select_index(component.selected_index - 1)
+                    return True
+                elif key_name == 'down' and component.selected_index < len(component.items) - 1:
+                    component.select_index(component.selected_index + 1)
+                    return True
+
+        return False
+
+    # Legacy methods for compatibility
     def get_window_at(self, px: int, py: int) -> Optional[Window]:
         """Get the window at a given position."""
         for window in reversed(self.windows):
@@ -643,60 +851,13 @@ class GUIState:
         return None
 
     def handle_click(self, px: int, py: int) -> Optional[Component]:
-        """
-        Handle a click at the given position.
-
-        Returns the component that was clicked, if any.
-        """
-        # First, unfocus any currently focused component
-        if self._focused_component and hasattr(self._focused_component, 'blur'):
-            self._focused_component.blur()
-            self._focused_component = None
-
-        # Find and click the component
+        """Handle a click at the given position."""
         component = self.get_component_at(px, py)
         if component and component.enabled:
             component.on_click(px, py)
-
-            # If it's focusable, focus it
-            if hasattr(component, 'focus'):
-                component.focus()
-                self._focused_component = component
-
             return component
-
         return None
-
-    def handle_key(self, key: str) -> bool:
-        """
-        Handle a key press.
-
-        Returns True if the key was handled.
-        """
-        if self._focused_component and isinstance(self._focused_component, TextInput):
-            if len(key) == 1 and key.isprintable():
-                self._focused_component.insert_char(key)
-                return True
-        return False
-
-    def handle_special_key(self, key_name: str) -> bool:
-        """
-        Handle a special key press (backspace, arrows, etc.).
-
-        Returns True if the key was handled.
-        """
-        if self._focused_component and isinstance(self._focused_component, TextInput):
-            if key_name == 'backspace':
-                self._focused_component.delete_char()
-                return True
-            elif key_name == 'left':
-                self._focused_component.move_cursor_left()
-                return True
-            elif key_name == 'right':
-                self._focused_component.move_cursor_right()
-                return True
-        return False
 
     @property
     def focused_component(self) -> Optional[Component]:
-        return self._focused_component
+        return self.get_focused_component()
