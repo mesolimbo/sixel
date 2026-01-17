@@ -6,6 +6,20 @@ Sixel allows rendering pixel-perfect graphics directly in terminal emulators tha
 
 ## Projects
 
+### Sixtop - System Monitor
+
+A terminal-based system monitor with real-time updating graphs, similar to Activity Monitor or Task Manager.
+
+![Sixtop Screenshot](sixtop/demo/screenshot.png)
+
+**Features:**
+- Five metric views: Energy, CPU, I/O, Memory, Network
+- Real-time graphs with historical data
+- Cross-platform support (Windows/macOS/Linux)
+- Battery status and power monitoring
+
+[See the Sixtop README for details](sixtop/README.md)
+
 ### Snake Game
 
 A fully playable snake game rendered entirely in Sixel graphics, including a custom bitmap font for text rendering.
@@ -46,6 +60,16 @@ If you see colored horizontal bars, your terminal supports Sixel graphics.
 sixel/
 ├── README.md          # This file
 ├── test.sixel         # Simple Sixel test file
+├── sixtop/            # System monitor project
+│   ├── README.md
+│   ├── Makefile
+│   ├── Pipfile
+│   ├── main.py
+│   ├── renderer.py
+│   ├── sixel.py
+│   ├── metrics.py
+│   └── demo/
+│       └── screenshot.png
 └── snake/             # Snake game project
     ├── README.md
     ├── Makefile
@@ -53,7 +77,7 @@ sixel/
     ├── main.py
     ├── game.py
     ├── sixel.py
-    ├── terminal.py
+    ├── renderer.py
     └── demo/
         └── sixel-snake.gif
 ```

@@ -52,7 +52,7 @@ class MetricsRenderer:
     real-time updating graphs.
     """
 
-    def __init__(self, width: int = 580, height: int = 84, scale: int = 1):
+    def __init__(self, width: int = 820, height: int = 156, scale: int = 1):
         """
         Initialize the renderer.
 
@@ -66,12 +66,12 @@ class MetricsRenderer:
         self.scale = 2  # Doubled for better text visibility
 
         # Layout constants - doubled for better visibility
-        self.padding = 8
+        self.padding = 12
         self.border_width = 1
-        self.panel_padding = 6
-        self.row_height = 20  # Doubled row spacing
+        self.panel_padding = 10
+        self.row_height = 22  # Row spacing for stat lines
         self.corner_radius = 10  # Doubled corner radius
-        self.instruction_height = 20  # Doubled instruction bar height
+        self.instruction_height = 24  # Instruction bar height
 
         # Three-column layout
         self.left_panel_width = (width - 4 * self.padding) // 3
@@ -87,9 +87,9 @@ class MetricsRenderer:
         # Panel height (excluding instruction bar area)
         self.panel_height = height - self.panel_top - self.padding
 
-        # Graph area - doubled layout
-        self.graph_y = self.panel_top + 28
-        self.graph_height = self.panel_height - 36
+        # Graph area
+        self.graph_y = self.panel_top + 30
+        self.graph_height = self.panel_height - 40
 
         # Text rendering - bold for better visibility
         self.bold = True
