@@ -713,7 +713,10 @@ class GUIState:
         if isinstance(component, Button):
             # Show pressed state briefly for visual feedback
             component.state = ComponentState.PRESSED
-            component.on_click(0, 0)
+            # Directly increment click count and call callback (don't use on_click which checks coordinates)
+            component._click_count += 1
+            if component._on_click:
+                component._on_click()
             # Note: state will be reset to FOCUSED on next input event
             return True
         elif isinstance(component, Checkbox):

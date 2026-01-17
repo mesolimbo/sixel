@@ -152,11 +152,10 @@ class TestMockTerminal:
         with mock_terminal:
             assert mock_terminal.is_raw is True
             assert mock_terminal.cursor_hidden is True
-            assert mock_terminal.mouse_enabled is True
+            # Mouse is no longer enabled by default (keyboard-only navigation)
 
         assert mock_terminal.is_raw is False
         assert mock_terminal.cursor_hidden is False
-        assert mock_terminal.mouse_enabled is False
 
 
 class TestProtocols:
