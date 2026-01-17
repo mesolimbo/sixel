@@ -444,7 +444,8 @@ class TestGUIState:
         w = Window(title="Test", x=10, y=20, width=200, height=150)
         gui.add_window(w)
         assert len(gui.windows) == 1
-        assert w.active is True
+        # Window is not active until focused via keyboard navigation
+        assert w.active is False
 
     def test_gui_state_get_window_at(self):
         """Test getting window at position."""
@@ -478,8 +479,8 @@ class TestGUIState:
         w.add_component(ti)
         gui.add_window(w)
 
-        # Focus the text input
-        gui.handle_click(50, 45)
+        # Focus the text input via keyboard navigation
+        gui.focus_next()
         assert ti.has_focus is True
 
         # Type a character
