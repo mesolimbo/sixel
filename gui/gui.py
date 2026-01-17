@@ -24,6 +24,8 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
+from sixel import register_image_colors
+
 
 class ComponentState(Enum):
     """Visual states for interactive components."""
@@ -618,6 +620,7 @@ class ImageDisplay(Component):
         self._on_zoom = on_zoom
         self._image_data: Optional[List[List[Tuple[int, int, int]]]] = None
         self._indexed_data: Optional[List[List[int]]] = None  # Cached palette-indexed version
+        self._color_map: Optional[dict] = None  # RGB tuple -> palette index mapping
         self._image_width = 0
         self._image_height = 0
 
@@ -638,13 +641,21 @@ class ImageDisplay(Component):
             self._image_width = img.width
             self._image_height = img.height
 
-            # Store as 2D array of RGB tuples
+            # Store as 2D array of RGB tuples and collect unique colors
             self._image_data = []
+            unique_colors: set = set()
             for y in range(img.height):
                 row = []
                 for x in range(img.width):
-                    row.append(img.getpixel((x, y)))
+                    pixel = img.getpixel((x, y))
+                    row.append(pixel)
+                    unique_colors.add(pixel)
                 self._image_data.append(row)
+
+            # Register unique colors with the palette and store the mapping
+            self._color_map = register_image_colors(list(unique_colors))
+            # Clear cached indexed data since we have new color mapping
+            self._indexed_data = None
 
             return True
         except Exception:
@@ -678,6 +689,11 @@ class ImageDisplay(Component):
     def indexed_data(self, value: Optional[List[List[int]]]) -> None:
         """Set the palette-indexed image data cache."""
         self._indexed_data = value
+
+    @property
+    def color_map(self) -> Optional[dict]:
+        """Get the RGB to palette index color mapping for this image."""
+        return self._color_map
 
     @property
     def image_width(self) -> int:

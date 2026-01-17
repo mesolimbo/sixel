@@ -477,16 +477,22 @@ class GUIRenderer:
                  COLOR_INDICES["text"], self.scale, False)
 
     def _build_indexed_cache(self, img_display: ImageDisplay) -> None:
-        """Build palette-indexed cache for an image."""
+        """Build palette-indexed cache for an image using its registered color map."""
         image_data = img_display.image_data
         if not image_data:
             return
 
+        color_map = img_display.color_map
         indexed = []
         for row in image_data:
             indexed_row = []
-            for r, g, b in row:
-                indexed_row.append(self._find_closest_color(r, g, b))
+            for rgb in row:
+                # Use direct color mapping if available (registered image colors)
+                if color_map and rgb in color_map:
+                    indexed_row.append(color_map[rgb])
+                else:
+                    # Fallback to closest color for any unregistered colors
+                    indexed_row.append(self._find_closest_color(*rgb))
             indexed.append(indexed_row)
         img_display.indexed_data = indexed
 
