@@ -124,13 +124,23 @@ class GUIRenderer:
         """Render a window and its components."""
         x, y = window.x, window.y
         w, h = window.width, window.height
+        radius = self.corner_radius
 
-        # Window background
-        fill_rect(pixels, x, y, w, h, COLOR_INDICES["window_bg"])
+        # Window background with rounded corners
+        draw_rounded_rect_filled(
+            pixels, x, y, w, h, radius,
+            COLOR_INDICES["window_bg"]
+        )
 
-        # Title bar background
+        # Title bar background with rounded top corners only
         title_bg = COLOR_INDICES["window_title_active"] if window.active else COLOR_INDICES["window_title_bg"]
-        fill_rect(pixels, x, y, w, self.title_bar_height, title_bg)
+        # Draw rounded rect for title, then fill in bottom part to square it off
+        draw_rounded_rect_filled(
+            pixels, x, y, w, self.title_bar_height + radius, radius,
+            title_bg
+        )
+        # Fill the bottom portion to make bottom corners square
+        fill_rect(pixels, x, y + self.title_bar_height, w, radius, title_bg)
 
         # Title text
         title_x = x + self.padding
@@ -138,8 +148,8 @@ class GUIRenderer:
         draw_text(pixels, title_x, title_y, window.title,
                  COLOR_INDICES["text_highlight"], self.scale, self.bold)
 
-        # Window border
-        draw_rect_border(pixels, x, y, w, h, COLOR_INDICES["window_border"])
+        # Window border with rounded corners
+        draw_rounded_rect_border(pixels, x, y, w, h, radius, COLOR_INDICES["window_border"])
 
         # Render each component
         for component in window.components:
