@@ -196,7 +196,8 @@ def run_app_loop(  # pragma: no cover
         with terminal:
             # Reserve space for rendering
             _, term_height = terminal.get_size()
-            rows_to_reserve = min(sixel_rows + 2, max(10, term_height // 3))
+            # Ensure we reserve enough rows for the full sixel content
+            rows_to_reserve = min(sixel_rows + 2, term_height - 2)
             terminal.write("\n" * rows_to_reserve)
             terminal.write(MOVE_UP.format(rows_to_reserve))
             terminal.write(SAVE_CURSOR)
