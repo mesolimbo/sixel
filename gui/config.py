@@ -5,6 +5,7 @@ Parses YAML configuration files to build GUI layouts with windows and widgets.
 Supports variable bindings between widgets for reactive updates.
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
@@ -14,9 +15,11 @@ import yaml
 
 # Platform detection
 IS_MACOS = sys.platform == 'darwin'
-# Keep UI at 1x resolution - let the terminal handle Retina/HiDPI scaling
-# This is much more performant than doubling pixels in Python
-PLATFORM_SCALE = 1
+IS_ITERM2 = os.environ.get('TERM_PROGRAM', '').lower() == 'iterm.app'
+
+# UI scaling: 2x on macOS with iTerm2 (native protocol is fast enough)
+# 1x elsewhere (sixel is slower, let terminal handle HiDPI)
+PLATFORM_SCALE = 2 if (IS_MACOS and IS_ITERM2) else 1
 
 from gui import (
     GUIState,
