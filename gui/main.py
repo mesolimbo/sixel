@@ -6,7 +6,10 @@ Demonstrates various GUI components rendered using sixel graphics
 with mouse click interaction support.
 
 Usage:
-    python main.py
+    python main.py [config.yaml]
+
+    If a YAML config file is provided, the GUI will be built from that config.
+    Otherwise, the built-in demo GUI will be used.
 
 Requirements:
     - Terminal with sixel support (e.g., iTerm2, mlterm, xterm +sixel)
@@ -14,7 +17,6 @@ Requirements:
 """
 
 import sys
-import time
 from pathlib import Path
 
 # Add parent directory for imports
@@ -36,6 +38,7 @@ from gui import (
     ListBox,
     ImageDisplay,
 )
+from config import build_gui_from_config, apply_bindings
 
 
 def create_demo_gui() -> GUIState:
@@ -390,24 +393,38 @@ def main():
     # Create terminal
     terminal = create_terminal()
 
-    # Create GUI state with demo components
-    gui = create_demo_gui()
+    # Check for config file argument
+    config_path = None
+    if len(sys.argv) > 1:
+        config_path = sys.argv[1]
+        # Resolve relative paths
+        if not Path(config_path).is_absolute():
+            config_path = str(Path.cwd() / config_path)
 
-    # Link sliders to progress bars
-    link_sliders_to_progress_bars(gui)
+    if config_path and Path(config_path).exists():
+        # Load GUI from YAML configuration
+        gui, gui_config, width, height = build_gui_from_config(config_path)
+        sync_callback = apply_bindings(gui_config)
+        print(f"Loaded GUI from: {config_path}")
+    else:
+        # Use built-in demo GUI
+        gui = create_demo_gui()
+        link_sliders_to_progress_bars(gui)
+        sync_callback = create_sync_callback(gui)
 
-    # Calculate dimensions for 2 rows of 4 windows
-    # Each window is 240px wide with 15px gap
-    # Width: 4 * 240 + 3 * 15 + 30 (margins) = 1035
-    # Height: 2 * 210 + 1 * 15 + 30 (margins) + 30 (instructions) = 495
-    width = 1035
-    height = 495
+        # Calculate dimensions for 2 rows of 4 windows
+        # Each window is 240px wide with 15px gap
+        # Width: 4 * 240 + 3 * 15 + 30 (margins) = 1035
+        # Height: 2 * 210 + 1 * 15 + 30 (margins) + 30 (instructions) = 495
+        width = 1035
+        height = 495
+
+        if config_path:
+            print(f"Config file not found: {config_path}")
+            print("Using built-in demo GUI")
 
     # Create renderer
     renderer = GUIRenderer(width=width, height=height)
-
-    # Create sync callback to update progress bars from sliders
-    sync_callback = create_sync_callback(gui)
 
     # Print instructions
     print("GUI Demo - Sixel Interactive Components")

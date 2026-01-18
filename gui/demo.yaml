@@ -1,0 +1,197 @@
+# GUI Configuration File
+# Defines the layout, windows, widgets, and variable bindings for the GUI
+
+layout:
+  window_width: 240
+  window_height: 210
+  window_gap: 15
+  start_x: 15
+  start_y: 15
+  title_bar_height: 36
+  content_padding: 15
+
+# Variable definitions - these can be bound to widget values
+variables:
+  slider1_value: 25
+  slider2_value: 50
+  slider3_value: 75
+  progress1_value: 25
+  progress2_value: 50
+  progress3_value: 75
+
+# Bindings - connect widget values to variables or other widgets
+bindings:
+  - source: slider1
+    target: progress1
+    property: value
+  - source: slider2
+    target: progress2
+    property: value
+  - source: slider3
+    target: progress3
+    property: value
+
+rows:
+  # Row 1 - Basic input widgets
+  - windows:
+      # Window 1: Buttons
+      - title: "BUTTONS"
+        widgets:
+          - type: button
+            id: btn_primary
+            label: "PRIMARY"
+            height: 42
+
+          - type: button
+            id: btn_secondary
+            label: "SECONDARY"
+            height: 42
+
+          - type: button
+            id: btn_disabled
+            label: "DISABLED"
+            height: 42
+            enabled: false
+
+      # Window 2: Checkboxes
+      - title: "CHECKBOXES"
+        widgets:
+          - type: checkbox
+            id: cb_option_a
+            label: "OPTION A"
+            height: 36
+            checked: true
+
+          - type: checkbox
+            id: cb_option_b
+            label: "OPTION B"
+            height: 36
+            checked: false
+
+          - type: checkbox
+            id: cb_option_c
+            label: "OPTION C"
+            height: 36
+            checked: true
+
+      # Window 3: Radio Buttons
+      - title: "RADIO"
+        radio_group: size_group
+        widgets:
+          - type: radio
+            id: rb_small
+            label: "SMALL"
+            height: 36
+            selected: true
+            group: size_group
+
+          - type: radio
+            id: rb_medium
+            label: "MEDIUM"
+            height: 36
+            group: size_group
+
+          - type: radio
+            id: rb_large
+            label: "LARGE"
+            height: 36
+            group: size_group
+
+      # Window 4: Text Inputs
+      - title: "TEXT INPUT"
+        widgets:
+          - type: text_input
+            id: input_name
+            placeholder: "NAME..."
+            height: 42
+            max_length: 100
+
+          - type: text_input
+            id: input_email
+            placeholder: "EMAIL..."
+            height: 42
+            max_length: 100
+
+          - type: text_input
+            id: input_password
+            placeholder: "PASSWORD..."
+            height: 42
+            max_length: 100
+
+  # Row 2 - Display and selection widgets
+  - windows:
+      # Window 5: Sliders
+      - title: "SLIDERS"
+        widgets:
+          - type: slider
+            id: slider1
+            height: 30
+            width_offset: -45  # Relative to window content width
+            min_value: 0
+            max_value: 100
+            value: 25
+            bind: slider1_value
+
+          - type: slider
+            id: slider2
+            height: 30
+            width_offset: -45
+            min_value: 0
+            max_value: 100
+            value: 50
+            bind: slider2_value
+
+          - type: slider
+            id: slider3
+            height: 30
+            width_offset: -45
+            min_value: 0
+            max_value: 100
+            value: 75
+            bind: slider3_value
+
+      # Window 6: Progress Bars
+      - title: "PROGRESS"
+        widgets:
+          - type: progress_bar
+            id: progress1
+            height: 36
+            value: 100
+            max_value: 100
+            bind: progress1_value
+
+          - type: progress_bar
+            id: progress2
+            height: 36
+            value: 65
+            max_value: 100
+            bind: progress2_value
+
+          - type: progress_bar
+            id: progress3
+            height: 36
+            value: 25
+            max_value: 100
+            bind: progress3_value
+
+      # Window 7: List Box
+      - title: "LIST"
+        widgets:
+          - type: listbox
+            id: item_list
+            height: 150
+            items:
+              - "ITEM 1"
+              - "ITEM 2"
+              - "ITEM 3"
+              - "ITEM 4"
+              - "ITEM 5"
+            selected_index: 0
+
+      # Window 8: Image Display
+      - title: "IMAGE"
+        widgets:
+          - type: image
+            id: image_display
+            height: 150
+            image_path: "demo/squirel.png"  # Relative to gui directory
