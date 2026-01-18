@@ -61,6 +61,71 @@ class InputThread(threading.Thread):  # pragma: no cover
         self.running = False
 
 
+class RenderThread(threading.Thread):  # pragma: no cover
+    """
+    Background thread for rendering frames asynchronously.
+
+    Renders frames without blocking the main input loop, which is critical
+    for responsiveness on macOS where rendering can take 100-200ms.
+    """
+
+    def __init__(self, renderer: GUIRenderer, gui_state: GUIState):
+        super().__init__(daemon=True)
+        self.renderer = renderer
+        self.gui_state = gui_state
+        self.running = True
+        self.render_requested = threading.Event()
+        self.frame_ready = threading.Event()
+        self.current_frame: Optional[str] = None
+        self.render_lock = threading.Lock()
+        self._render_id = 0  # Track which render request we're on
+
+    def request_render(self) -> int:
+        """Request a new frame render. Returns render ID."""
+        with self.render_lock:
+            self._render_id += 1
+            render_id = self._render_id
+        self.frame_ready.clear()
+        self.render_requested.set()
+        return render_id
+
+    def get_frame(self) -> Optional[str]:
+        """Get the most recently rendered frame (non-blocking)."""
+        with self.render_lock:
+            return self.current_frame
+
+    def wait_for_frame(self, timeout: float = 0.0) -> Optional[str]:
+        """Wait for a frame to be ready, with timeout."""
+        if self.frame_ready.wait(timeout):
+            with self.render_lock:
+                return self.current_frame
+        return None
+
+    def run(self) -> None:
+        """Continuously render frames when requested."""
+        while self.running:
+            # Wait for a render request
+            if self.render_requested.wait(timeout=0.1):
+                self.render_requested.clear()
+
+                if not self.running:
+                    break
+
+                # Render the frame
+                try:
+                    frame = self.renderer.render_frame(self.gui_state)
+                    with self.render_lock:
+                        self.current_frame = frame
+                    self.frame_ready.set()
+                except Exception:
+                    pass
+
+    def stop(self) -> None:
+        """Signal the thread to stop."""
+        self.running = False
+        self.render_requested.set()  # Wake up the thread
+
+
 def process_input(
     event: Optional[InputEvent],
     gui_state: GUIState
@@ -184,6 +249,7 @@ def run_app_loop(  # pragma: no cover
     """
     event_queue: Queue[InputEvent] = Queue()
     input_thread = None
+    render_thread: Optional[RenderThread] = None
 
     # Calculate how many terminal rows the sixel output occupies
     # Sixel uses 6 pixels per character row
@@ -232,27 +298,31 @@ def run_app_loop(  # pragma: no cover
             input_thread = InputThread(terminal, event_queue)
             input_thread.start()
 
-            # Initial render
+            # On macOS, use async rendering to keep input responsive
+            # On other platforms, use synchronous rendering (faster overall)
+            if IS_MACOS:
+                render_thread = RenderThread(renderer, gui_state)
+                render_thread.start()
+
+            # Initial render (synchronous for first frame)
             render_frame()
 
             last_time = time.time()
             last_render_time = time.time()
+            last_display_time = time.time()
             running = True
 
-            # Platform-specific render timing (macOS with 2x scale needs lower FPS)
-            # 10 FPS on macOS (0.1s) to handle 4x pixel count from 2x scaling
-            # 25 FPS elsewhere (0.04s) for smooth interaction
-            min_render_interval = 0.1 if IS_MACOS else 0.04
-
-            # Cursor blink check interval (less frequent on macOS)
+            # Platform-specific timing
+            # macOS: async rendering, just throttle display updates
+            # Others: sync rendering with frame rate limit
+            min_render_interval = 0.05 if IS_MACOS else 0.04  # Request rate
+            min_display_interval = 0.033 if IS_MACOS else 0.04  # Display rate (30 FPS max)
             cursor_blink_interval = 0.3 if IS_MACOS else 0.15
+            input_check_interval = 0.008  # Fast input checking on all platforms
 
-            # Sleep interval between input checks
-            input_check_interval = 0.016 if IS_MACOS else 0.008
-
-            # Frame cache - skip re-rendering if nothing changed
+            # Track if we have a pending render
+            render_pending = False
             last_frame_hash = 0
-            cached_frame: Optional[str] = None
 
             while running:
                 current_time = time.time()
@@ -283,43 +353,65 @@ def run_app_loop(  # pragma: no cover
                 focused = gui_state.get_focused_component()
                 needs_cursor_blink = isinstance(focused, TextInput) and focused.has_focus
 
-                # Render if dirty, or periodically for cursor blink
+                # Compute state hash to detect changes
+                state_hash = hash((
+                    gui_state._focused_window_index,
+                    tuple(gui_state._component_index_per_window.items()),
+                    tuple(w.active for w in gui_state.windows),
+                    needs_cursor_blink,
+                    int(current_time / 0.6) if needs_cursor_blink else 0,
+                ))
+
                 time_since_render = current_time - last_render_time
-                should_render = (
-                    (gui_state.is_dirty() and time_since_render >= min_render_interval) or
-                    (needs_cursor_blink and time_since_render >= cursor_blink_interval)
+                time_since_display = current_time - last_display_time
+
+                # Determine if we need to render
+                state_changed = state_hash != last_frame_hash
+                should_request_render = (
+                    (state_changed and time_since_render >= min_render_interval) or
+                    (needs_cursor_blink and time_since_render >= cursor_blink_interval) or
+                    input_processed
                 )
 
-                if should_render:
-                    # Compute a simple hash of GUI state to detect changes
-                    # This avoids expensive sixel encoding when nothing visual changed
-                    state_hash = hash((
-                        gui_state._focused_window_index,
-                        tuple(gui_state._component_index_per_window.items()),
-                        tuple(w.active for w in gui_state.windows),
-                        needs_cursor_blink,
-                        int(current_time / 0.6) if needs_cursor_blink else 0,  # Cursor phase
-                    ))
-
-                    # Only re-render if state actually changed or no cache
-                    if state_hash != last_frame_hash or cached_frame is None or input_processed:
-                        frame = renderer.render_frame(gui_state)
-                        cached_frame = frame
+                if IS_MACOS and render_thread:
+                    # Async rendering mode for macOS
+                    if should_request_render and not render_pending:
+                        render_thread.request_render()
+                        render_pending = True
+                        last_render_time = current_time
                         last_frame_hash = state_hash
-                    else:
-                        frame = cached_frame
 
-                    # Output the frame
-                    if use_home_position:
-                        terminal.write(CURSOR_HOME)
-                    else:
-                        terminal.write(RESTORE_CURSOR)
-                        terminal.write("\n")
-                    terminal.write(frame)
-                    terminal.flush()
+                    # Check if a new frame is ready to display
+                    if render_pending and time_since_display >= min_display_interval:
+                        frame = render_thread.get_frame()
+                        if frame:
+                            if use_home_position:
+                                terminal.write(CURSOR_HOME)
+                            else:
+                                terminal.write(RESTORE_CURSOR)
+                                terminal.write("\n")
+                            terminal.write(frame)
+                            terminal.flush()
+                            last_display_time = current_time
+                            render_pending = False
+                            gui_state.clear_dirty()
+                else:
+                    # Synchronous rendering for other platforms
+                    if should_request_render and time_since_display >= min_display_interval:
+                        frame = renderer.render_frame(gui_state)
 
-                    gui_state.clear_dirty()
-                    last_render_time = current_time
+                        if use_home_position:
+                            terminal.write(CURSOR_HOME)
+                        else:
+                            terminal.write(RESTORE_CURSOR)
+                            terminal.write("\n")
+                        terminal.write(frame)
+                        terminal.flush()
+
+                        gui_state.clear_dirty()
+                        last_render_time = current_time
+                        last_display_time = current_time
+                        last_frame_hash = state_hash
 
                 # Small sleep to prevent CPU spinning
                 time.sleep(input_check_interval)
@@ -330,6 +422,10 @@ def run_app_loop(  # pragma: no cover
         if input_thread is not None:
             input_thread.stop()
             input_thread.join(timeout=0.5)
+
+        if render_thread is not None:
+            render_thread.stop()
+            render_thread.join(timeout=0.5)
 
         if on_quit:
             on_quit()
