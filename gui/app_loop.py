@@ -295,7 +295,7 @@ def run_app_loop(  # pragma: no cover
                     # This avoids expensive sixel encoding when nothing visual changed
                     state_hash = hash((
                         gui_state._focused_window_index,
-                        gui_state._focused_component_index,
+                        tuple(gui_state._component_index_per_window.items()),
                         tuple(w.active for w in gui_state.windows),
                         needs_cursor_blink,
                         int(current_time / 0.6) if needs_cursor_blink else 0,  # Cursor phase
