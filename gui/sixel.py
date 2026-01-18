@@ -630,8 +630,13 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
 
 
 def _get_color_index_to_rgb() -> Dict[int, Tuple[int, int, int]]:
-    """Create a mapping from color index to RGB tuple."""
-    return {idx: COLORS[name] for name, idx in COLOR_INDICES.items()}
+    """Create a mapping from color index to RGB tuple, including dynamic image colors."""
+    # Start with UI colors
+    result = {idx: COLORS[name] for name, idx in COLOR_INDICES.items()}
+    # Add dynamic image colors (maps RGB -> idx, so we need to reverse it)
+    for rgb, idx in _IMAGE_COLORS.items():
+        result[idx] = rgb
+    return result
 
 
 def pixels_to_png(
