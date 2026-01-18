@@ -26,7 +26,7 @@ install-dev:
 	pipenv install --dev
 
 run:
-	pipenv run python main.py
+	pipenv run python main.py demo.yaml
 
 shell:
 	pipenv shell
