@@ -214,25 +214,23 @@ def run_app_loop(  # pragma: no cover
             render_frame()
 
             last_time = time.time()
+            last_render_time = time.time()
             running = True
+            min_render_interval = 0.033  # ~30 FPS max for rendering
 
             while running:
                 current_time = time.time()
                 delta_time = current_time - last_time
-                needs_render = False
+                last_time = current_time
 
-                # Process all queued input events
+                # Process all queued input events immediately (responsive input)
                 while True:
                     try:
                         event = event_queue.get_nowait()
-                        should_continue, event_needs_render = process_input(
-                            event, gui_state
-                        )
+                        should_continue, _ = process_input(event, gui_state)
                         if not should_continue:
                             running = False
                             break
-                        if event_needs_render:
-                            needs_render = True
                     except Empty:
                         break
 
@@ -242,15 +240,16 @@ def run_app_loop(  # pragma: no cover
                 # Call animation callback if provided
                 if animation_callback:
                     animation_callback(delta_time)
-                    needs_render = True
 
-                # Render if needed
-                if needs_render:
+                # Only render if dirty and enough time has passed
+                time_since_render = current_time - last_render_time
+                if gui_state.is_dirty() and time_since_render >= min_render_interval:
                     render_frame()
-                    last_time = current_time
+                    gui_state.clear_dirty()
+                    last_render_time = current_time
 
                 # Small sleep to prevent CPU spinning
-                time.sleep(0.016)  # ~60 FPS max
+                time.sleep(0.008)  # Check input more frequently
 
     except KeyboardInterrupt:
         pass

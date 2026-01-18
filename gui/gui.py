@@ -778,6 +778,34 @@ class GUIState:
         self.windows: List[Window] = []
         self._focused_window_index: int = -1
         self._component_index_per_window: dict = {}  # window -> index of selected component
+        self._dirty_windows: set = set()  # Set of window indices that need redraw
+        self._full_redraw_needed: bool = True  # Initial full redraw
+
+    def mark_dirty(self, window_index: Optional[int] = None) -> None:
+        """Mark a window as needing redraw, or all windows if index is None."""
+        if window_index is None:
+            self._full_redraw_needed = True
+        else:
+            self._dirty_windows.add(window_index)
+
+    def get_dirty_windows(self) -> List[int]:
+        """Get list of window indices that need redraw."""
+        if self._full_redraw_needed:
+            return list(range(len(self.windows)))
+        return list(self._dirty_windows)
+
+    def clear_dirty(self) -> None:
+        """Clear all dirty flags."""
+        self._dirty_windows.clear()
+        self._full_redraw_needed = False
+
+    def is_dirty(self) -> bool:
+        """Check if any window needs redraw."""
+        return self._full_redraw_needed or len(self._dirty_windows) > 0
+
+    def needs_full_redraw(self) -> bool:
+        """Check if a full redraw is needed."""
+        return self._full_redraw_needed
 
     def add_window(self, window: Window) -> None:
         """Add a window to the GUI."""
@@ -844,15 +872,25 @@ class GUIState:
         """Move focus to the next window."""
         if not self.windows:
             return
+        old_index = self._focused_window_index
         self._focused_window_index = (self._focused_window_index + 1) % len(self.windows)
         self._update_focus_visuals()
+        # Mark both old and new windows as dirty
+        if old_index >= 0:
+            self._dirty_windows.add(old_index)
+        self._dirty_windows.add(self._focused_window_index)
 
     def focus_previous(self) -> None:
         """Move focus to the previous window."""
         if not self.windows:
             return
+        old_index = self._focused_window_index
         self._focused_window_index = (self._focused_window_index - 1) % len(self.windows)
         self._update_focus_visuals()
+        # Mark both old and new windows as dirty
+        if old_index >= 0:
+            self._dirty_windows.add(old_index)
+        self._dirty_windows.add(self._focused_window_index)
 
     def activate_focused(self) -> bool:
         """
@@ -863,6 +901,10 @@ class GUIState:
         component = self.get_focused_component()
         if not component:
             return False
+
+        # Mark current window as dirty
+        if self._focused_window_index >= 0:
+            self._dirty_windows.add(self._focused_window_index)
 
         # Handle different component types
         if isinstance(component, Button):
@@ -894,6 +936,9 @@ class GUIState:
         if component and isinstance(component, TextInput):
             if len(key) == 1 and key.isprintable():
                 component.insert_char(key)
+                # Mark current window as dirty
+                if self._focused_window_index >= 0:
+                    self._dirty_windows.add(self._focused_window_index)
                 return True
         return False
 
@@ -914,58 +959,59 @@ class GUIState:
             return False
 
         current_idx = self._component_index_per_window.get(id(window), 0)
+        handled = False
 
         # TextInput: handle backspace and left/right cursor movement
         if isinstance(component, TextInput):
             if key_name == 'backspace':
                 component.delete_char()
-                return True
+                handled = True
             elif key_name == 'left':
                 component.move_cursor_left()
-                return True
+                handled = True
             elif key_name == 'right':
                 component.move_cursor_right()
-                return True
+                handled = True
             elif key_name in ('up', 'down'):
                 # Move to prev/next component in window
                 if key_name == 'up' and current_idx > 0:
                     self._component_index_per_window[id(window)] = current_idx - 1
                     self._update_focus_visuals()
-                    return True
+                    handled = True
                 elif key_name == 'down' and current_idx < len(components) - 1:
                     self._component_index_per_window[id(window)] = current_idx + 1
                     self._update_focus_visuals()
-                    return True
+                    handled = True
 
         # Slider: left/right to adjust value
         elif isinstance(component, Slider):
             if key_name == 'left':
                 step = (component.max_value - component.min_value) / 20
                 component.value = max(component.min_value, component.value - step)
-                return True
+                handled = True
             elif key_name == 'right':
                 step = (component.max_value - component.min_value) / 20
                 component.value = min(component.max_value, component.value + step)
-                return True
+                handled = True
             elif key_name in ('up', 'down'):
                 # Move to prev/next slider
                 if key_name == 'up' and current_idx > 0:
                     self._component_index_per_window[id(window)] = current_idx - 1
                     self._update_focus_visuals()
-                    return True
+                    handled = True
                 elif key_name == 'down' and current_idx < len(components) - 1:
                     self._component_index_per_window[id(window)] = current_idx + 1
                     self._update_focus_visuals()
-                    return True
+                    handled = True
 
         # ImageDisplay: up/right to zoom in, down/left to zoom out
         elif isinstance(component, ImageDisplay):
             if key_name in ('up', 'right'):
                 component.zoom_in()
-                return True
+                handled = True
             elif key_name in ('down', 'left'):
                 component.zoom_out()
-                return True
+                handled = True
 
         # RadioButton, Checkbox, Button, ListBox: up/down to move between items
         elif isinstance(component, (RadioButton, Checkbox, Button, ListBox)):
@@ -976,7 +1022,7 @@ class GUIState:
                 new_component = components[current_idx - 1]
                 if isinstance(new_component, RadioButton):
                     new_component.select()
-                return True
+                handled = True
             elif key_name == 'down' and current_idx < len(components) - 1:
                 self._component_index_per_window[id(window)] = current_idx + 1
                 self._update_focus_visuals()
@@ -984,17 +1030,21 @@ class GUIState:
                 new_component = components[current_idx + 1]
                 if isinstance(new_component, RadioButton):
                     new_component.select()
-                return True
+                handled = True
             # ListBox also handles internal selection
-            if isinstance(component, ListBox):
+            if not handled and isinstance(component, ListBox):
                 if key_name == 'up' and component.selected_index > 0:
                     component.select_index(component.selected_index - 1)
-                    return True
+                    handled = True
                 elif key_name == 'down' and component.selected_index < len(component.items) - 1:
                     component.select_index(component.selected_index + 1)
-                    return True
+                    handled = True
 
-        return False
+        # Mark current window as dirty if handled
+        if handled and self._focused_window_index >= 0:
+            self._dirty_windows.add(self._focused_window_index)
+
+        return handled
 
     # Legacy methods for compatibility
     def get_window_at(self, px: int, py: int) -> Optional[Window]:
