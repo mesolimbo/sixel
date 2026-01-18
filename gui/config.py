@@ -12,10 +12,11 @@ from dataclasses import dataclass, field
 
 import yaml
 
-# Platform detection for UI scaling
+# Platform detection
 IS_MACOS = sys.platform == 'darwin'
-# Double the size on macOS for better visibility in iTerm2
-PLATFORM_SCALE = 2 if IS_MACOS else 1
+# Keep UI at 1x resolution - let the terminal handle Retina/HiDPI scaling
+# This is much more performant than doubling pixels in Python
+PLATFORM_SCALE = 1
 
 from gui import (
     GUIState,
