@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from sixel import (
     create_pixel_buffer,
+    clear_pixel_buffer,
     pixels_to_sixel,
     fill_rect,
     draw_text,
@@ -97,6 +98,10 @@ class MetricsRenderer:
         # Current view
         self.current_view = MetricView.CPU
 
+        # Reusable pixel buffer (optimization: avoid allocation per frame)
+        self._pixels = create_pixel_buffer(width, height, COLOR_INDICES["background"])
+        self._bg_color = COLOR_INDICES["background"]
+
     def next_view(self) -> MetricView:
         """Switch to the next view."""
         views = list(MetricView)
@@ -115,12 +120,9 @@ class MetricsRenderer:
         Returns:
             Sixel escape sequence string
         """
-        # Create pixel buffer with background
-        pixels = create_pixel_buffer(
-            self.width,
-            self.height,
-            COLOR_INDICES["background"]
-        )
+        # Clear reusable pixel buffer (optimization: faster than creating new)
+        clear_pixel_buffer(self._pixels, self._bg_color)
+        pixels = self._pixels
 
         # Draw frame border (green)
         self._draw_frame_border(pixels)
