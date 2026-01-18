@@ -23,6 +23,7 @@ from gui import (
     Slider,
     ProgressBar,
     ListBox,
+    ImageDisplay,
     ComponentState,
 )
 from sixel import (
@@ -127,6 +128,36 @@ class TestScreenshotGeneration:
         draw_text(pixels, 75, 8, "70%", COLOR_INDICES["text_highlight"], 1, False)
 
         output_path = screenshot_dir / "progress.png"
+        img = pixels_to_png(pixels, str(output_path))
+
+        assert img is not None
+        assert output_path.exists()
+
+    def test_generate_image_display_screenshot(self, screenshot_dir):
+        """Generate screenshot of image display component."""
+        screenshot_dir.mkdir(parents=True, exist_ok=True)
+
+        # Create GUI with image display
+        gui = GUIState()
+        window = Window(title="IMAGE", x=10, y=10, width=160, height=140)
+
+        # Load the squirrel demo image
+        demo_dir = Path(__file__).parent.parent / "demo"
+        image_path = str(demo_dir / "squirel.png")
+        img_display = ImageDisplay(
+            x=20, y=44, width=140, height=100,
+            image_path=image_path
+        )
+        window.add_component(img_display)
+        gui.add_window(window)
+
+        # Render
+        renderer = GUIRenderer(width=180, height=170)
+        pixels = create_pixel_buffer(180, 170, COLOR_INDICES["background"])
+        for w in gui.windows:
+            renderer._render_window(pixels, w)
+
+        output_path = screenshot_dir / "image_display.png"
         img = pixels_to_png(pixels, str(output_path))
 
         assert img is not None
@@ -254,6 +285,24 @@ class TestFullGUIScreenshot:
         list_window.add_component(listbox)
         gui.add_window(list_window)
 
+        # Window 8: Image Display
+        image_window = Window(
+            title="IMAGE",
+            x=start_x + 7 * (window_width + window_gap), y=start_y,
+            width=window_width, height=window_height
+        )
+        image_x = image_window.x + 10
+        image_y_start = image_window.y + title_bar_height + 10
+        demo_dir = Path(__file__).parent.parent / "demo"
+        image_path = str(demo_dir / "squirel.png")
+        img_display = ImageDisplay(
+            x=image_x, y=image_y_start,
+            width=window_width - 20, height=100,
+            image_path=image_path
+        )
+        image_window.add_component(img_display)
+        gui.add_window(image_window)
+
         return gui
 
     def test_generate_full_gui_screenshot(self, screenshot_dir):
@@ -261,11 +310,12 @@ class TestFullGUIScreenshot:
         # Create full demo GUI
         gui = self._create_demo_gui()
 
-        # Create renderer with same dimensions as main.py
-        renderer = GUIRenderer(width=1200, height=180)
+        # Create renderer with dimensions for 8 windows
+        # 8 windows * 160px + 7 gaps * 10px + 2 margins * 10px = 1370px
+        renderer = GUIRenderer(width=1370, height=180)
 
         # Render to pixel buffer (we need to access internal rendering)
-        pixels = create_pixel_buffer(1200, 180, COLOR_INDICES["background"])
+        pixels = create_pixel_buffer(1370, 180, COLOR_INDICES["background"])
 
         # Render each window
         for window in gui.windows:
@@ -279,7 +329,7 @@ class TestFullGUIScreenshot:
 
         assert img is not None
         assert output_path.exists()
-        assert img.size == (1200, 180)
+        assert img.size == (1370, 180)
 
     def test_generate_focused_button_screenshot(self, screenshot_dir):
         """Generate screenshot showing focused button state."""
