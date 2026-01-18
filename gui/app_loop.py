@@ -241,9 +241,17 @@ def run_app_loop(  # pragma: no cover
                 if animation_callback:
                     animation_callback(delta_time)
 
-                # Only render if dirty and enough time has passed
+                # Check if a text input is focused (need periodic redraws for cursor blink)
+                focused = gui_state.get_focused_component()
+                needs_cursor_blink = isinstance(focused, TextInput) and focused.has_focus
+
+                # Render if dirty, or periodically for cursor blink (~2Hz for 0.6s blink)
                 time_since_render = current_time - last_render_time
-                if gui_state.is_dirty() and time_since_render >= min_render_interval:
+                should_render = (
+                    (gui_state.is_dirty() and time_since_render >= min_render_interval) or
+                    (needs_cursor_blink and time_since_render >= 0.15)  # Smooth cursor blink
+                )
+                if should_render:
                     render_frame()
                     gui_state.clear_dirty()
                     last_render_time = current_time
