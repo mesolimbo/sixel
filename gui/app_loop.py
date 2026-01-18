@@ -22,6 +22,7 @@ from typing import Optional, Callable
 from gui import GUIState, TextInput
 from renderer import GUIRenderer
 from terminals import Terminal, KeyEvent, InputEvent
+from sixel import IS_ITERM2
 
 # Platform detection for render timing
 IS_MACOS = sys.platform == 'darwin'
@@ -298,9 +299,11 @@ def run_app_loop(  # pragma: no cover
             input_thread = InputThread(terminal, event_queue)
             input_thread.start()
 
-            # On macOS, use async rendering to keep input responsive
+            # On macOS with sixel (not iTerm2), use async rendering to keep input responsive
+            # iTerm2's native protocol is fast enough for synchronous rendering
             # On other platforms, use synchronous rendering (faster overall)
-            if IS_MACOS:
+            use_async_rendering = IS_MACOS and not IS_ITERM2
+            if use_async_rendering:
                 render_thread = RenderThread(renderer, gui_state)
                 render_thread.start()
 
@@ -373,7 +376,7 @@ def run_app_loop(  # pragma: no cover
                     input_processed
                 )
 
-                if IS_MACOS and render_thread:
+                if use_async_rendering and render_thread:
                     # Async rendering mode for macOS
                     if should_request_render and not render_pending:
                         render_thread.request_render()

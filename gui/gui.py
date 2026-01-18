@@ -12,6 +12,7 @@ SOLID Principles Applied:
 - Dependency Inversion: High-level modules depend on abstractions (Component protocol)
 """
 
+import os
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -21,8 +22,10 @@ from typing import Protocol, Tuple, List, Optional, Callable, runtime_checkable
 
 # Platform detection for UI scaling
 IS_MACOS = sys.platform == 'darwin'
-# Keep UI at 1x resolution - let the terminal handle Retina/HiDPI scaling
-PLATFORM_SCALE = 1
+_IS_ITERM2 = os.environ.get('TERM_PROGRAM', '').lower() == 'iterm.app'
+# UI scaling: 2x on macOS with iTerm2 (native protocol is fast enough)
+# 1x elsewhere (sixel is slower, let terminal handle HiDPI)
+PLATFORM_SCALE = 2 if (IS_MACOS and _IS_ITERM2) else 1
 
 try:
     from PIL import Image
