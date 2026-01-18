@@ -23,10 +23,11 @@ from renderer import GUIRenderer
 from terminals import Terminal, KeyEvent, InputEvent
 
 
-# ANSI escape codes
+# ANSI escape codes for cursor control
 SAVE_CURSOR = "\x1b[s"
 RESTORE_CURSOR = "\x1b[u"
-MOVE_UP = "\x1b[{}A"
+MOVE_UP = "\x1b[{}A"    # Move cursor up N lines
+CURSOR_HOME = "\x1b[H"  # Move cursor to top-left
 
 
 class InputThread(threading.Thread):  # pragma: no cover
@@ -181,27 +182,45 @@ def run_app_loop(  # pragma: no cover
     event_queue: Queue[InputEvent] = Queue()
     input_thread = None
 
-    # Calculate sixel rows for spacing
+    # Calculate how many terminal rows the sixel output occupies
+    # Sixel uses 6 pixels per character row
     sixel_rows = (renderer.height + 5) // 6
+
+    # Will be set based on whether sixel fits in terminal
+    use_home_position = False
 
     def render_frame():
         """Helper to render and display a frame."""
         frame = renderer.render_frame(gui_state)
-        terminal.write(RESTORE_CURSOR)
-        terminal.write("\n")
+        if use_home_position:
+            # Large sixel mode: always go to top-left
+            terminal.write(CURSOR_HOME)
+        else:
+            # Normal mode: restore to saved position
+            terminal.write(RESTORE_CURSOR)
+            terminal.write("\n")  # Top margin to avoid clipping command line
         terminal.write(frame)
         terminal.flush()
 
     try:
         with terminal:
-            # Reserve space for rendering
+            # Get terminal height to calculate how much space to reserve
             _, term_height = terminal.get_size()
-            # Ensure we reserve enough rows for the full sixel content
-            rows_to_reserve = min(sixel_rows + 2, term_height - 2)
-            terminal.write("\n" * rows_to_reserve)
-            terminal.write(MOVE_UP.format(rows_to_reserve))
-            terminal.write(SAVE_CURSOR)
-            terminal.flush()
+
+            if sixel_rows >= term_height:
+                # Sixel is larger than terminal - use home position mode
+                # This ensures each frame starts at the same screen position
+                use_home_position = True
+                # Scroll to clear the screen first
+                terminal.write("\n" * term_height)
+                terminal.flush()
+            else:
+                # Sixel fits in terminal - use reserve-save-restore pattern
+                rows_to_reserve = min(sixel_rows + 1, max(8, term_height // 3))
+                terminal.write("\n" * rows_to_reserve)
+                terminal.write(MOVE_UP.format(rows_to_reserve))
+                terminal.write(SAVE_CURSOR)
+                terminal.flush()
 
             # Focus the first focusable component
             gui_state.focus_next()

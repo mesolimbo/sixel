@@ -269,12 +269,49 @@ class UnixTerminal(Terminal):
 
     def get_cursor_position(self) -> Optional[Tuple[int, int]]:
         """
-        Get current cursor position as (column, row).
+        Get current cursor position by querying the terminal.
 
-        Note: On Unix with ANSI mouse tracking, coordinates are typically
-        relative to the visible window, so we return None to indicate
-        no offset adjustment is needed.
+        Sends the DSR (Device Status Report) escape sequence and parses
+        the CPR (Cursor Position Report) response.
+
+        Returns:
+            Tuple of (row, col) 1-indexed, or None if query fails.
         """
+        # Send cursor position query
+        self.write('\x1b[6n')
+        self.flush()
+
+        # Read response: ESC [ row ; col R
+        response = ""
+        fd = sys.stdin.fileno()
+
+        # Wait for response with timeout
+        ready, _, _ = select.select([fd], [], [], 0.1)
+        if not ready:
+            return None
+
+        while True:
+            ready, _, _ = select.select([fd], [], [], 0.01)
+            if ready:
+                char = os.read(fd, 1).decode('latin-1', errors='ignore')
+                response += char
+                if char == 'R':
+                    break
+            else:
+                break
+
+        # Parse response: ESC [ row ; col R
+        if response.startswith('\x1b[') and response.endswith('R'):
+            try:
+                coords = response[2:-1]  # Remove ESC [ and R
+                parts = coords.split(';')
+                if len(parts) == 2:
+                    row = int(parts[0])
+                    col = int(parts[1])
+                    return (row, col)
+            except (ValueError, IndexError):
+                pass
+
         return None
 
     def hide_cursor(self) -> None:

@@ -265,6 +265,15 @@ class Terminal(ABC):
         """Move cursor to top-left corner."""
         ...
 
+    def get_cursor_position(self) -> Optional[Tuple[int, int]]:
+        """
+        Get current cursor position.
+
+        Returns:
+            Tuple of (row, col) 1-indexed, or None if not supported.
+        """
+        return None
+
     @abstractmethod
     def clear_screen(self) -> None:
         """Clear the entire screen."""
