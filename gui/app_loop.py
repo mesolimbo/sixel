@@ -356,11 +356,20 @@ def run_app_loop(  # pragma: no cover
                 focused = gui_state.get_focused_component()
                 needs_cursor_blink = isinstance(focused, TextInput) and focused.has_focus
 
+                # Build component state for hash (only focused component matters for input)
+                focused_state = None
+                if focused:
+                    if isinstance(focused, TextInput):
+                        focused_state = (focused.text, focused.cursor_pos)
+                    elif hasattr(focused, 'value'):
+                        focused_state = focused.value
+
                 # Compute state hash to detect changes
                 state_hash = hash((
                     gui_state._focused_window_index,
                     tuple(gui_state._component_index_per_window.items()),
                     tuple(w.active for w in gui_state.windows),
+                    focused_state,
                     needs_cursor_blink,
                     int(current_time / 0.6) if needs_cursor_blink else 0,
                 ))
@@ -371,9 +380,8 @@ def run_app_loop(  # pragma: no cover
                 # Determine if we need to render
                 state_changed = state_hash != last_frame_hash
                 should_request_render = (
-                    (state_changed and time_since_render >= min_render_interval) or
-                    (needs_cursor_blink and time_since_render >= cursor_blink_interval) or
-                    input_processed
+                    state_changed or
+                    (needs_cursor_blink and time_since_render >= cursor_blink_interval)
                 )
 
                 if use_async_rendering and render_thread:
