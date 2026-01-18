@@ -356,13 +356,23 @@ def run_app_loop(  # pragma: no cover
                 focused = gui_state.get_focused_component()
                 needs_cursor_blink = isinstance(focused, TextInput) and focused.has_focus
 
-                # Build component state for hash (only focused component matters for input)
+                # Build component state for hash (capture all relevant state changes)
                 focused_state = None
                 if focused:
                     if isinstance(focused, TextInput):
                         focused_state = (focused.text, focused.cursor_pos)
-                    elif hasattr(focused, 'value'):
+                    elif hasattr(focused, 'zoom'):  # ImageDisplay
+                        focused_state = focused.zoom
+                    elif hasattr(focused, 'checked'):  # Checkbox
+                        focused_state = focused.checked
+                    elif hasattr(focused, 'selected'):  # RadioButton
+                        focused_state = focused.selected
+                    elif hasattr(focused, 'pressed'):  # Button
+                        focused_state = focused.pressed
+                    elif hasattr(focused, 'value'):  # Slider, ProgressBar
                         focused_state = focused.value
+                    elif hasattr(focused, 'selected_index'):  # ListBox
+                        focused_state = focused.selected_index
 
                 # Compute state hash to detect changes
                 state_hash = hash((
@@ -381,6 +391,7 @@ def run_app_loop(  # pragma: no cover
                 state_changed = state_hash != last_frame_hash
                 should_request_render = (
                     state_changed or
+                    (input_processed and time_since_render >= min_render_interval) or
                     (needs_cursor_blink and time_since_render >= cursor_blink_interval)
                 )
 

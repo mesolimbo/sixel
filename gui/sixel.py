@@ -21,12 +21,6 @@ try:
 except ImportError:
     PIL_AVAILABLE = False
 
-try:
-    import numpy as np
-    NUMPY_AVAILABLE = True
-except ImportError:
-    NUMPY_AVAILABLE = False
-
 # Detect if running in iTerm2 (check TERM_PROGRAM environment variable)
 IS_ITERM2 = os.environ.get('TERM_PROGRAM', '').lower() == 'iterm.app'
 
@@ -121,7 +115,7 @@ def register_image_colors(colors: List[Tuple[int, int, int]]) -> Dict[Tuple[int,
     Returns:
         Dictionary mapping RGB tuples to their palette indices
     """
-    global _NEXT_IMAGE_COLOR_INDEX, _ITERM2_COLOR_TABLE, _ITERM2_COLOR_ARRAY
+    global _NEXT_IMAGE_COLOR_INDEX, _ITERM2_COLOR_TABLE
 
     color_map = {}
     new_colors_added = False
@@ -137,7 +131,6 @@ def register_image_colors(colors: List[Tuple[int, int, int]]) -> Dict[Tuple[int,
     # Invalidate iTerm2 color cache if new colors were added
     if new_colors_added:
         _ITERM2_COLOR_TABLE = None
-        _ITERM2_COLOR_ARRAY = None
 
     return color_map
 
@@ -773,7 +766,6 @@ def pixels_to_png(
 
 # Cache for iTerm2 color lookup table (built once, reused)
 _ITERM2_COLOR_TABLE: Optional[List[Tuple[int, int, int]]] = None
-_ITERM2_COLOR_ARRAY: Optional["np.ndarray"] = None  # Numpy array version
 
 
 def _get_iterm2_color_table() -> List[Tuple[int, int, int]]:
@@ -790,20 +782,10 @@ def _get_iterm2_color_table() -> List[Tuple[int, int, int]]:
     return _ITERM2_COLOR_TABLE
 
 
-def _get_iterm2_color_array() -> "np.ndarray":
-    """Get or build the numpy color array for fast vectorized lookup."""
-    global _ITERM2_COLOR_ARRAY
-    if _ITERM2_COLOR_ARRAY is None and NUMPY_AVAILABLE:
-        color_table = _get_iterm2_color_table()
-        _ITERM2_COLOR_ARRAY = np.array(color_table, dtype=np.uint8)
-    return _ITERM2_COLOR_ARRAY
-
-
 def invalidate_iterm2_color_cache() -> None:
     """Invalidate the iTerm2 color cache (call after registering new image colors)."""
-    global _ITERM2_COLOR_TABLE, _ITERM2_COLOR_ARRAY
+    global _ITERM2_COLOR_TABLE
     _ITERM2_COLOR_TABLE = None
-    _ITERM2_COLOR_ARRAY = None
 
 
 def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
@@ -811,8 +793,8 @@ def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
     Convert a 2D pixel buffer to an iTerm2 inline image escape sequence.
 
     Optimized for speed with:
-    - Numpy vectorized color lookup (if available)
-    - Minimal PNG compression (compress_level=0)
+    - Pre-built color lookup table for O(1) access
+    - JPEG encoding (faster than PNG, hardware accelerated on macOS)
     - Direct byte array construction
 
     Args:
@@ -821,54 +803,40 @@ def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
         height: Image height in pixels
 
     Returns:
-        iTerm2 escape sequence string with embedded base64 PNG
+        iTerm2 escape sequence string with embedded base64 image
     """
     if not PIL_AVAILABLE:
         # Fall back to sixel if PIL not available
         return pixels_to_sixel(pixels, width, height)
 
-    if NUMPY_AVAILABLE:
-        # Fast path: use numpy for vectorized color lookup
-        color_array = _get_iterm2_color_array()
+    # Get cached color table for fast lookup
+    color_table = _get_iterm2_color_table()
+    table_len = len(color_table)
 
-        # Convert pixels to numpy array and use fancy indexing
-        pixel_indices = np.array(pixels, dtype=np.int32)
+    # Build raw RGB bytes directly
+    rgb_bytes = bytearray(width * height * 3)
+    idx = 0
+    for row in pixels:
+        for color_idx in row:
+            if color_idx < table_len:
+                r, g, b = color_table[color_idx]
+            else:
+                r, g, b = 0, 0, 0
+            rgb_bytes[idx] = r
+            rgb_bytes[idx + 1] = g
+            rgb_bytes[idx + 2] = b
+            idx += 3
 
-        # Clip indices to valid range
-        pixel_indices = np.clip(pixel_indices, 0, len(color_array) - 1)
+    # Create image from raw bytes
+    img = Image.frombytes("RGB", (width, height), bytes(rgb_bytes))
 
-        # Vectorized lookup: converts all indices to RGB in one operation
-        rgb_array = color_array[pixel_indices]
-
-        # Create image directly from numpy array
-        img = Image.fromarray(rgb_array, mode='RGB')
-    else:
-        # Slow path: Python loop fallback
-        color_table = _get_iterm2_color_table()
-        table_len = len(color_table)
-
-        rgb_bytes = bytearray(width * height * 3)
-        idx = 0
-        for row in pixels:
-            for color_idx in row:
-                if color_idx < table_len:
-                    r, g, b = color_table[color_idx]
-                else:
-                    r, g, b = 0, 0, 0
-                rgb_bytes[idx] = r
-                rgb_bytes[idx + 1] = g
-                rgb_bytes[idx + 2] = b
-                idx += 3
-
-        img = Image.frombytes("RGB", (width, height), bytes(rgb_bytes))
-
-    # Encode to PNG with no compression for speed
+    # Encode to JPEG - faster than PNG, especially on macOS
     buffer = io.BytesIO()
-    img.save(buffer, format='PNG', compress_level=0)
-    png_data = buffer.getvalue()
+    img.save(buffer, format='JPEG', quality=90)
+    image_data = buffer.getvalue()
 
     # Base64 encode
-    b64_data = base64.b64encode(png_data).decode('ascii')
+    b64_data = base64.b64encode(image_data).decode('ascii')
 
     # Return iTerm2 escape sequence
     return f"{ITERM2_IMAGE_START}{b64_data}{ITERM2_IMAGE_END}"

@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 pillow = "*"
 pyyaml = "*"
-numpy = "*"
 
 [dev-packages]
 pytest = "*"
