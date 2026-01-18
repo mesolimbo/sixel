@@ -21,7 +21,8 @@ from typing import Protocol, Tuple, List, Optional, Callable, runtime_checkable
 
 # Platform detection for UI scaling
 IS_MACOS = sys.platform == 'darwin'
-PLATFORM_SCALE = 2 if IS_MACOS else 1
+# Keep UI at 1x resolution - let the terminal handle Retina/HiDPI scaling
+PLATFORM_SCALE = 1
 
 try:
     from PIL import Image

@@ -11,7 +11,8 @@ from typing import List, Optional, Tuple
 
 # Platform detection for UI scaling
 IS_MACOS = sys.platform == 'darwin'
-PLATFORM_SCALE = 2 if IS_MACOS else 1
+# Keep UI at 1x resolution - let the terminal handle Retina/HiDPI scaling
+PLATFORM_SCALE = 1
 
 from sixel import (
     create_pixel_buffer,
@@ -65,9 +66,8 @@ class GUIRenderer:
         """
         self.width = width
         self.height = height
-        # Font scale: use 3 on macOS (slightly larger than base 2), keep 2 elsewhere
-        # Don't double to 4 as that's too large and slow
-        self.scale = 3 if IS_MACOS else 2
+        # Font scale: keep consistent at 2 for all platforms
+        self.scale = 2
         self.bold = True
         self._platform_scale = PLATFORM_SCALE
 
