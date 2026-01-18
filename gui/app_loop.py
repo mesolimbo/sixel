@@ -13,6 +13,7 @@ Navigation:
 - q: Quit (when not in a text field)
 """
 
+import sys
 import time
 import threading
 from queue import Queue, Empty
@@ -22,6 +23,8 @@ from gui import GUIState, TextInput
 from renderer import GUIRenderer
 from terminals import Terminal, KeyEvent, InputEvent
 
+# Platform detection for render timing
+IS_MACOS = sys.platform == 'darwin'
 
 # ANSI escape codes for cursor control
 SAVE_CURSOR = "\x1b[s"
@@ -235,7 +238,21 @@ def run_app_loop(  # pragma: no cover
             last_time = time.time()
             last_render_time = time.time()
             running = True
-            min_render_interval = 0.033  # ~30 FPS max for rendering
+
+            # Platform-specific render timing (macOS with 2x scale needs lower FPS)
+            # 10 FPS on macOS (0.1s) to handle 4x pixel count from 2x scaling
+            # 25 FPS elsewhere (0.04s) for smooth interaction
+            min_render_interval = 0.1 if IS_MACOS else 0.04
+
+            # Cursor blink check interval (less frequent on macOS)
+            cursor_blink_interval = 0.3 if IS_MACOS else 0.15
+
+            # Sleep interval between input checks
+            input_check_interval = 0.016 if IS_MACOS else 0.008
+
+            # Frame cache - skip re-rendering if nothing changed
+            last_frame_hash = 0
+            cached_frame: Optional[str] = None
 
             while running:
                 current_time = time.time()
@@ -243,10 +260,12 @@ def run_app_loop(  # pragma: no cover
                 last_time = current_time
 
                 # Process all queued input events immediately (responsive input)
+                input_processed = False
                 while True:
                     try:
                         event = event_queue.get_nowait()
                         should_continue, _ = process_input(event, gui_state)
+                        input_processed = True
                         if not should_continue:
                             running = False
                             break
@@ -264,19 +283,46 @@ def run_app_loop(  # pragma: no cover
                 focused = gui_state.get_focused_component()
                 needs_cursor_blink = isinstance(focused, TextInput) and focused.has_focus
 
-                # Render if dirty, or periodically for cursor blink (~2Hz for 0.6s blink)
+                # Render if dirty, or periodically for cursor blink
                 time_since_render = current_time - last_render_time
                 should_render = (
                     (gui_state.is_dirty() and time_since_render >= min_render_interval) or
-                    (needs_cursor_blink and time_since_render >= 0.15)  # Smooth cursor blink
+                    (needs_cursor_blink and time_since_render >= cursor_blink_interval)
                 )
+
                 if should_render:
-                    render_frame()
+                    # Compute a simple hash of GUI state to detect changes
+                    # This avoids expensive sixel encoding when nothing visual changed
+                    state_hash = hash((
+                        gui_state._focused_window_index,
+                        gui_state._focused_component_index,
+                        tuple(w.active for w in gui_state.windows),
+                        needs_cursor_blink,
+                        int(current_time / 0.6) if needs_cursor_blink else 0,  # Cursor phase
+                    ))
+
+                    # Only re-render if state actually changed or no cache
+                    if state_hash != last_frame_hash or cached_frame is None or input_processed:
+                        frame = renderer.render_frame(gui_state)
+                        cached_frame = frame
+                        last_frame_hash = state_hash
+                    else:
+                        frame = cached_frame
+
+                    # Output the frame
+                    if use_home_position:
+                        terminal.write(CURSOR_HOME)
+                    else:
+                        terminal.write(RESTORE_CURSOR)
+                        terminal.write("\n")
+                    terminal.write(frame)
+                    terminal.flush()
+
                     gui_state.clear_dirty()
                     last_render_time = current_time
 
                 # Small sleep to prevent CPU spinning
-                time.sleep(0.008)  # Check input more frequently
+                time.sleep(input_check_interval)
 
     except KeyboardInterrupt:
         pass
