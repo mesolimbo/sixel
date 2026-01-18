@@ -65,7 +65,9 @@ class GUIRenderer:
         """
         self.width = width
         self.height = height
-        self.scale = 2 * PLATFORM_SCALE  # Larger font for better readability (scaled)
+        # Font scale: use 3 on macOS (slightly larger than base 2), keep 2 elsewhere
+        # Don't double to 4 as that's too large and slow
+        self.scale = 3 if IS_MACOS else 2
         self.bold = True
         self._platform_scale = PLATFORM_SCALE
 
