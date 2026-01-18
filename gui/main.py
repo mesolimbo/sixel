@@ -39,6 +39,7 @@ from gui import (
     ImageDisplay,
 )
 from config import build_gui_from_config, apply_bindings, PLATFORM_SCALE
+from sixel import IS_ITERM2
 
 
 def create_demo_gui() -> GUIState:
@@ -436,8 +437,12 @@ def main():
     renderer = GUIRenderer(width=width, height=height)
 
     # Print instructions
-    print("GUI Demo - Sixel Interactive Components")
+    print("GUI Demo - Interactive Terminal Graphics")
     print("=" * 50)
+    if IS_ITERM2:
+        print("Rendering: iTerm2 inline image protocol (optimized)")
+    else:
+        print("Rendering: Sixel graphics protocol")
     print("Tab: Next window | Up/Down: Select item | Left/Right: Adjust")
     print("Space: Activate | q: Quit (when not in text field)")
     print()

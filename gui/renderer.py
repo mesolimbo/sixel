@@ -18,6 +18,9 @@ from sixel import (
     create_pixel_buffer,
     clear_pixel_buffer,
     pixels_to_sixel,
+    pixels_to_iterm2,
+    get_preferred_image_encoder,
+    IS_ITERM2,
     fill_rect,
     draw_rect_border,
     draw_text,
@@ -84,15 +87,23 @@ class GUIRenderer:
         # Cursor blink settings (slow blink: 0.6s on, 0.6s off)
         self._cursor_blink_interval = 0.6
 
+        # Use the best image encoder for the current terminal
+        # iTerm2 uses its native protocol which is much faster than sixel
+        self._encode_frame = get_preferred_image_encoder()
+        self._is_iterm2 = IS_ITERM2
+
     def render_frame(self, gui_state: GUIState) -> str:
         """
-        Render the GUI state as a sixel string.
+        Render the GUI state as a terminal graphics escape sequence.
+
+        Uses iTerm2 inline image protocol on iTerm2 (much faster),
+        or sixel encoding on other terminals.
 
         Args:
             gui_state: The GUI state to render
 
         Returns:
-            Sixel escape sequence string
+            Terminal escape sequence string (sixel or iTerm2)
         """
         # Clear and reuse pixel buffer
         clear_pixel_buffer(self._pixels, self._bg_color)
@@ -104,7 +115,8 @@ class GUIRenderer:
         # Draw instructions at bottom
         self._draw_instructions(self._pixels)
 
-        return pixels_to_sixel(self._pixels, self.width, self.height)
+        # Use the preferred encoder for this terminal
+        return self._encode_frame(self._pixels, self.width, self.height)
 
     def get_window_rows(self, gui_state: GUIState) -> List[List[int]]:
         """
