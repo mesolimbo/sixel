@@ -5,6 +5,7 @@ Renders GUI components and windows as sixel graphics.
 Uses the component state to determine visual appearance.
 """
 
+import time
 from typing import List, Optional, Tuple
 
 from sixel import (
@@ -71,6 +72,9 @@ class GUIRenderer:
         # Reusable pixel buffer (created once, cleared each frame)
         self._pixels = create_pixel_buffer(width, height, COLOR_INDICES["background"])
         self._bg_color = COLOR_INDICES["background"]
+
+        # Cursor blink settings (slow blink: 0.6s on, 0.6s off)
+        self._cursor_blink_interval = 0.6
 
     def render_frame(self, gui_state: GUIState) -> str:
         """
@@ -313,28 +317,60 @@ class GUIRenderer:
         draw_rect_border(pixels, text_input.x, text_input.y,
                         text_input.width, text_input.height, border_color)
 
-        # Text content
+        # Text content area
         text_x = text_input.x + self.component_padding
         text_y = text_input.y + (text_input.height - FONT_HEIGHT * self.scale) // 2
+        cursor_width = 3  # 1.5x cursor width
+        available_width = text_input.width - self.component_padding * 2 - cursor_width
+
+        # Cursor blink: use blue color (input_focus) and slow blink
+        cursor_visible = True
+        if text_input.has_focus:
+            # Slow blink: cursor visible for half the cycle
+            blink_phase = time.time() % (self._cursor_blink_interval * 2)
+            cursor_visible = blink_phase < self._cursor_blink_interval
 
         if text_input.text:
-            draw_text(pixels, text_x, text_y, text_input.text,
+            # Calculate full text width and cursor position within text
+            full_text_width = get_text_width(text_input.text, self.scale, False)
+            cursor_offset = get_text_width(
+                text_input.text[:text_input.cursor_pos], self.scale, False
+            )
+
+            # If text overflows, scroll to keep cursor visible (show end of text)
+            scroll_offset = 0
+            if full_text_width > available_width:
+                # Scroll so cursor is visible near the right edge
+                # Keep some margin from the right edge
+                margin = min(30, available_width // 4)
+                if cursor_offset > available_width - margin:
+                    scroll_offset = cursor_offset - (available_width - margin)
+                # Clamp scroll to not show empty space on right when at end
+                max_scroll = max(0, full_text_width - available_width)
+                scroll_offset = min(scroll_offset, max_scroll)
+
+            # Draw text with scroll offset
+            # We need to find which characters are visible
+            visible_text = text_input.text
+            visible_cursor_offset = cursor_offset - scroll_offset
+
+            # Simple approach: draw text shifted left by scroll_offset pixels
+            draw_text(pixels, text_x - scroll_offset, text_y, visible_text,
                      COLOR_INDICES["text"], self.scale, False)
 
-            # Cursor if focused
-            if text_input.has_focus:
-                cursor_offset = get_text_width(
-                    text_input.text[:text_input.cursor_pos], self.scale, False
-                )
-                cursor_x = text_x + cursor_offset + 3  # 1.5x from 2
-                fill_rect(pixels, cursor_x, text_y, 3,  # 1.5x cursor width
-                         FONT_HEIGHT * self.scale, COLOR_INDICES["input_cursor"])
+            # Cursor if focused and visible (blinking)
+            if text_input.has_focus and cursor_visible:
+                cursor_x = text_x + visible_cursor_offset
+                # Clamp cursor to visible area
+                if cursor_x >= text_x and cursor_x < text_input.x + text_input.width - self.component_padding:
+                    fill_rect(pixels, cursor_x, text_y, cursor_width,
+                             FONT_HEIGHT * self.scale, COLOR_INDICES["input_focus"])
         else:
             # Show placeholder or cursor
-            if text_input.has_focus:
-                fill_rect(pixels, text_x, text_y, 3,  # 1.5x cursor width
-                         FONT_HEIGHT * self.scale, COLOR_INDICES["input_cursor"])
-            else:
+            if text_input.has_focus and cursor_visible:
+                fill_rect(pixels, text_x, text_y, cursor_width,
+                         FONT_HEIGHT * self.scale, COLOR_INDICES["input_focus"])
+            elif not text_input.has_focus:
                 draw_text(pixels, text_x, text_y, text_input.placeholder,
                          COLOR_INDICES["text_dim"], self.scale, False)
 
