@@ -314,7 +314,7 @@ def create_demo_gui() -> GUIState:
     )
 
     image_x = image_window.x + 15
-    image_y_start = image_window.y + title_bar_height + 8
+    image_y_start = image_window.y + title_bar_height + 15
 
     # Load the squirrel image
     image_path = str(Path(__file__).parent / "demo" / "squirel.png")
