@@ -58,7 +58,7 @@ class GUIRenderer:
         """
         self.width = width
         self.height = height
-        self.scale = 1
+        self.scale = 2  # Larger font for better readability
         self.bold = True
 
         # Layout constants (1.5x scale for better display on macOS)
@@ -67,12 +67,13 @@ class GUIRenderer:
         self.title_bar_height = 36
         self.component_padding = 9
 
-    def render_frame(self, gui_state: GUIState) -> str:
+    def render_frame(self, gui_state: GUIState, dirty_windows: Optional[List[int]] = None) -> str:
         """
-        Render the entire GUI state as a sixel string.
+        Render the GUI state as a sixel string.
 
         Args:
             gui_state: The GUI state to render
+            dirty_windows: Optional list of window indices to render (None = all)
 
         Returns:
             Sixel escape sequence string
@@ -84,14 +85,42 @@ class GUIRenderer:
             COLOR_INDICES["background"]
         )
 
-        # Render each window
-        for window in gui_state.windows:
+        # Render windows (all or only dirty ones)
+        windows_to_render = gui_state.windows
+        if dirty_windows is not None:
+            # Even with partial dirty, render all for consistent display
+            # The optimization is in the caller not calling render at all
+            pass
+
+        for window in windows_to_render:
             self._render_window(pixels, window)
 
         # Draw instructions at bottom
         self._draw_instructions(pixels)
 
         return pixels_to_sixel(pixels, self.width, self.height)
+
+    def get_window_rows(self, gui_state: GUIState) -> List[List[int]]:
+        """
+        Group windows by their vertical position into rows.
+
+        Returns:
+            List of lists, where each inner list contains window indices in that row.
+        """
+        if not gui_state.windows:
+            return []
+
+        # Group windows by their y position
+        rows_dict = {}
+        for i, window in enumerate(gui_state.windows):
+            # Round y to nearest 50 pixels to group windows in same row
+            row_key = window.y // 50
+            if row_key not in rows_dict:
+                rows_dict[row_key] = []
+            rows_dict[row_key].append(i)
+
+        # Sort by row key and return just the lists
+        return [rows_dict[k] for k in sorted(rows_dict.keys())]
 
     def _draw_instructions(self, pixels: List[List[int]]) -> None:
         """Draw instruction text at the bottom of the frame."""

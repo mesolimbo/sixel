@@ -359,6 +359,9 @@ def link_sliders_to_progress_bars(gui: GUIState):
 
 def create_sync_callback(gui: GUIState):
     """Create a callback that syncs sliders to progress bars each frame."""
+    # Cache previous values to detect changes
+    prev_values = {}
+
     def sync(delta_time: float) -> None:
         # Sync slider values to progress bars
         if len(gui.windows) > 5:
@@ -368,8 +371,16 @@ def create_sync_callback(gui: GUIState):
             sliders = [c for c in slider_window.components if isinstance(c, Slider)]
             progress_bars = [c for c in progress_window.components if isinstance(c, ProgressBar)]
 
-            for slider, progress in zip(sliders, progress_bars):
-                progress.value = slider.value
+            changed = False
+            for i, (slider, progress) in enumerate(zip(sliders, progress_bars)):
+                if prev_values.get(i) != slider.value:
+                    progress.value = slider.value
+                    prev_values[i] = slider.value
+                    changed = True
+
+            # Only mark progress window dirty if values changed
+            if changed:
+                gui.mark_dirty(5)  # Progress window is at index 5
 
     return sync
 
