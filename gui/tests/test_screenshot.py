@@ -58,17 +58,17 @@ class TestScreenshotGeneration:
         """Generate screenshot of button component."""
         screenshot_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create a simple pixel buffer with a button
-        width, height = 120, 40
+        # Create a simple pixel buffer with a button (taller for proper display)
+        width, height = 140, 55
         pixels = create_pixel_buffer(width, height, COLOR_INDICES["background"])
 
-        # Draw a button
+        # Draw a button with rounded corners
         draw_rounded_rect_filled(
-            pixels, 10, 5, 100, 30, 4,
+            pixels, 10, 10, 120, 35, 6,
             COLOR_INDICES["button_bg"],
             COLOR_INDICES["button_border"]
         )
-        draw_text(pixels, 30, 12, "BUTTON", COLOR_INDICES["text"], 1, True)
+        draw_text(pixels, 35, 20, "BUTTON", COLOR_INDICES["text"], 1, True)
 
         # Save as PNG
         output_path = screenshot_dir / "button.png"
@@ -99,15 +99,15 @@ class TestScreenshotGeneration:
         """Generate screenshot of slider component."""
         screenshot_dir.mkdir(parents=True, exist_ok=True)
 
-        width, height = 150, 30
+        width, height = 160, 36
         pixels = create_pixel_buffer(width, height, COLOR_INDICES["background"])
 
-        # Draw slider track
-        fill_rect(pixels, 10, 12, 120, 6, COLOR_INDICES["slider_track"])
-        # Draw filled portion
-        fill_rect(pixels, 10, 12, 60, 6, COLOR_INDICES["slider_fill"])
-        # Draw thumb
-        fill_rect(pixels, 65, 5, 10, 20, COLOR_INDICES["slider_thumb"])
+        # Draw slider track with rounded corners
+        draw_rounded_rect_filled(pixels, 10, 14, 130, 8, 4, COLOR_INDICES["slider_track"])
+        # Draw filled portion with rounded corners
+        draw_rounded_rect_filled(pixels, 10, 14, 65, 8, 4, COLOR_INDICES["slider_fill"])
+        # Draw thumb with rounded corners
+        draw_rounded_rect_filled(pixels, 70, 6, 15, 24, 4, COLOR_INDICES["slider_thumb"])
 
         output_path = screenshot_dir / "slider.png"
         img = pixels_to_png(pixels, str(output_path))
@@ -119,13 +119,13 @@ class TestScreenshotGeneration:
         """Generate screenshot of progress bar component."""
         screenshot_dir.mkdir(parents=True, exist_ok=True)
 
-        width, height = 180, 30
+        width, height = 190, 40
         pixels = create_pixel_buffer(width, height, COLOR_INDICES["background"])
 
-        # Draw progress bar
-        fill_rect(pixels, 10, 5, 160, 20, COLOR_INDICES["progress_bg"])
-        fill_rect(pixels, 10, 5, 112, 20, COLOR_INDICES["progress_fill"])  # 70%
-        draw_text(pixels, 75, 8, "70%", COLOR_INDICES["text_highlight"], 1, False)
+        # Draw progress bar with rounded corners
+        draw_rounded_rect_filled(pixels, 10, 8, 170, 24, 6, COLOR_INDICES["progress_bg"])
+        draw_rounded_rect_filled(pixels, 10, 8, 119, 24, 6, COLOR_INDICES["progress_fill"])  # 70%
+        draw_text(pixels, 80, 13, "70%", COLOR_INDICES["text_highlight"], 1, False)
 
         output_path = screenshot_dir / "progress.png"
         img = pixels_to_png(pixels, str(output_path))
@@ -137,23 +137,23 @@ class TestScreenshotGeneration:
         """Generate screenshot of image display component."""
         screenshot_dir.mkdir(parents=True, exist_ok=True)
 
-        # Create GUI with image display
+        # Create GUI with image display (1.5x scale)
         gui = GUIState()
-        window = Window(title="IMAGE", x=10, y=10, width=160, height=140)
+        window = Window(title="IMAGE", x=15, y=15, width=240, height=210)
 
         # Load the squirrel demo image
         demo_dir = Path(__file__).parent.parent / "demo"
         image_path = str(demo_dir / "squirel.png")
         img_display = ImageDisplay(
-            x=20, y=44, width=140, height=100,
+            x=30, y=66, width=210, height=150,
             image_path=image_path
         )
         window.add_component(img_display)
         gui.add_window(window)
 
         # Render
-        renderer = GUIRenderer(width=180, height=170)
-        pixels = create_pixel_buffer(180, 170, COLOR_INDICES["background"])
+        renderer = GUIRenderer(width=270, height=240)
+        pixels = create_pixel_buffer(270, 240, COLOR_INDICES["background"])
         for w in gui.windows:
             renderer._render_window(pixels, w)
 
@@ -168,63 +168,52 @@ class TestFullGUIScreenshot:
     """Tests for full GUI screenshots."""
 
     def _create_demo_gui(self) -> GUIState:
-        """Create a demo GUI matching the main.py demo."""
+        """Create a demo GUI matching the main.py demo (2 rows of 4 windows)."""
         gui = GUIState()
 
-        # Layout constants
-        window_width = 160
-        window_height = 140
-        window_gap = 10
-        start_x = 10
-        start_y = 10
-        title_bar_height = 24
+        # Layout constants (1.5x scale for better display)
+        window_width = 240
+        window_height = 210
+        window_gap = 15
+        start_x = 15
+        start_y = 15
+        title_bar_height = 36
 
-        # Window 1: Buttons
-        btn_window = Window(
-            title="BUTTONS", x=start_x, y=start_y,
-            width=window_width, height=window_height
-        )
-        btn_window.add_component(Button(
-            start_x + 10, start_y + title_bar_height + 10,
-            window_width - 20, 28, "PRIMARY"
-        ))
-        btn_window.add_component(Button(
-            start_x + 10, start_y + title_bar_height + 45,
-            window_width - 20, 28, "SECONDARY"
-        ))
-        disabled_btn = Button(
-            start_x + 10, start_y + title_bar_height + 80,
-            window_width - 20, 28, "DISABLED"
-        )
+        def get_window_pos(index: int):
+            """Get window position for 2-row, 4-column layout."""
+            row = index // 4
+            col = index % 4
+            x = start_x + col * (window_width + window_gap)
+            y = start_y + row * (window_height + window_gap)
+            return x, y
+
+        # Window 1: Buttons (row 0, col 0)
+        wx, wy = get_window_pos(0)
+        btn_window = Window(title="BUTTONS", x=wx, y=wy, width=window_width, height=window_height)
+        btn_window.add_component(Button(wx + 15, wy + title_bar_height + 15, window_width - 30, 42, "PRIMARY"))
+        btn_window.add_component(Button(wx + 15, wy + title_bar_height + 68, window_width - 30, 42, "SECONDARY"))
+        disabled_btn = Button(wx + 15, wy + title_bar_height + 121, window_width - 30, 42, "DISABLED")
         disabled_btn.enabled = False
         btn_window.add_component(disabled_btn)
         gui.add_window(btn_window)
 
-        # Window 2: Checkboxes
-        cb_window = Window(
-            title="CHECKBOXES",
-            x=start_x + window_width + window_gap, y=start_y,
-            width=window_width, height=window_height
-        )
-        cb_x = cb_window.x + 10
-        cb_y_start = cb_window.y + title_bar_height + 10
-        cb_window.add_component(Checkbox(cb_x, cb_y_start, window_width - 20, 24, "OPTION A", checked=True))
-        cb_window.add_component(Checkbox(cb_x, cb_y_start + 30, window_width - 20, 24, "OPTION B", checked=False))
-        cb_window.add_component(Checkbox(cb_x, cb_y_start + 60, window_width - 20, 24, "OPTION C", checked=True))
+        # Window 2: Checkboxes (row 0, col 1)
+        wx, wy = get_window_pos(1)
+        cb_window = Window(title="CHECKBOXES", x=wx, y=wy, width=window_width, height=window_height)
+        cb_y = wy + title_bar_height + 15
+        cb_window.add_component(Checkbox(wx + 15, cb_y, window_width - 30, 36, "OPTION A", checked=True))
+        cb_window.add_component(Checkbox(wx + 15, cb_y + 45, window_width - 30, 36, "OPTION B", checked=False))
+        cb_window.add_component(Checkbox(wx + 15, cb_y + 90, window_width - 30, 36, "OPTION C", checked=True))
         gui.add_window(cb_window)
 
-        # Window 3: Radio Buttons
-        radio_window = Window(
-            title="RADIO",
-            x=start_x + 2 * (window_width + window_gap), y=start_y,
-            width=window_width, height=window_height
-        )
+        # Window 3: Radio Buttons (row 0, col 2)
+        wx, wy = get_window_pos(2)
+        radio_window = Window(title="RADIO", x=wx, y=wy, width=window_width, height=window_height)
         radio_group = RadioGroup()
-        radio_x = radio_window.x + 10
-        radio_y_start = radio_window.y + title_bar_height + 10
-        rb1 = RadioButton(radio_x, radio_y_start, window_width - 20, 24, "SMALL", selected=True)
-        rb2 = RadioButton(radio_x, radio_y_start + 30, window_width - 20, 24, "MEDIUM")
-        rb3 = RadioButton(radio_x, radio_y_start + 60, window_width - 20, 24, "LARGE")
+        radio_y = wy + title_bar_height + 15
+        rb1 = RadioButton(wx + 15, radio_y, window_width - 30, 36, "SMALL", selected=True)
+        rb2 = RadioButton(wx + 15, radio_y + 45, window_width - 30, 36, "MEDIUM")
+        rb3 = RadioButton(wx + 15, radio_y + 90, window_width - 30, 36, "LARGE")
         radio_group.add_button(rb1)
         radio_group.add_button(rb2)
         radio_group.add_button(rb3)
@@ -233,71 +222,50 @@ class TestFullGUIScreenshot:
         radio_window.add_component(rb3)
         gui.add_window(radio_window)
 
-        # Window 4: Text Input
-        input_window = Window(
-            title="TEXT INPUT",
-            x=start_x + 3 * (window_width + window_gap), y=start_y,
-            width=window_width, height=window_height
-        )
-        input_x = input_window.x + 10
-        input_y_start = input_window.y + title_bar_height + 10
-        input_window.add_component(TextInput(input_x, input_y_start, window_width - 20, 28, "NAME...", 15))
-        input_window.add_component(TextInput(input_x, input_y_start + 38, window_width - 20, 28, "EMAIL...", 20))
-        input_window.add_component(TextInput(input_x, input_y_start + 76, window_width - 20, 28, "PASSWORD...", 15))
+        # Window 4: Text Input (row 0, col 3)
+        wx, wy = get_window_pos(3)
+        input_window = Window(title="TEXT INPUT", x=wx, y=wy, width=window_width, height=window_height)
+        input_y = wy + title_bar_height + 15
+        input_window.add_component(TextInput(wx + 15, input_y, window_width - 30, 42, "NAME...", 100))
+        input_window.add_component(TextInput(wx + 15, input_y + 57, window_width - 30, 42, "EMAIL...", 100))
+        input_window.add_component(TextInput(wx + 15, input_y + 114, window_width - 30, 42, "PASSWORD...", 100))
         gui.add_window(input_window)
 
-        # Window 5: Sliders
-        slider_window = Window(
-            title="SLIDERS",
-            x=start_x + 4 * (window_width + window_gap), y=start_y,
-            width=window_width, height=window_height
-        )
-        slider_x = slider_window.x + 10
-        slider_y_start = slider_window.y + title_bar_height + 15
-        slider_window.add_component(Slider(slider_x, slider_y_start, window_width - 50, 20, 0, 100, 25))
-        slider_window.add_component(Slider(slider_x, slider_y_start + 35, window_width - 50, 20, 0, 100, 50))
-        slider_window.add_component(Slider(slider_x, slider_y_start + 70, window_width - 50, 20, 0, 100, 75))
+        # Window 5: Sliders (row 1, col 0)
+        wx, wy = get_window_pos(4)
+        slider_window = Window(title="SLIDERS", x=wx, y=wy, width=window_width, height=window_height)
+        slider_y = wy + title_bar_height + 22
+        slider_window.add_component(Slider(wx + 15, slider_y, window_width - 75, 30, 0, 100, 25))
+        slider_window.add_component(Slider(wx + 15, slider_y + 52, window_width - 75, 30, 0, 100, 50))
+        slider_window.add_component(Slider(wx + 15, slider_y + 104, window_width - 75, 30, 0, 100, 75))
         gui.add_window(slider_window)
 
-        # Window 6: Progress Bars
-        progress_window = Window(
-            title="PROGRESS",
-            x=start_x + 5 * (window_width + window_gap), y=start_y,
-            width=window_width, height=window_height
-        )
-        progress_x = progress_window.x + 10
-        progress_y_start = progress_window.y + title_bar_height + 15
-        progress_window.add_component(ProgressBar(progress_x, progress_y_start, window_width - 20, 24, 100, 100))
-        progress_window.add_component(ProgressBar(progress_x, progress_y_start + 35, window_width - 20, 24, 65, 100))
-        progress_window.add_component(ProgressBar(progress_x, progress_y_start + 70, window_width - 20, 24, 25, 100))
+        # Window 6: Progress Bars (row 1, col 1)
+        wx, wy = get_window_pos(5)
+        progress_window = Window(title="PROGRESS", x=wx, y=wy, width=window_width, height=window_height)
+        progress_y = wy + title_bar_height + 22
+        progress_window.add_component(ProgressBar(wx + 15, progress_y, window_width - 30, 36, 100, 100))
+        progress_window.add_component(ProgressBar(wx + 15, progress_y + 52, window_width - 30, 36, 65, 100))
+        progress_window.add_component(ProgressBar(wx + 15, progress_y + 104, window_width - 30, 36, 25, 100))
         gui.add_window(progress_window)
 
-        # Window 7: List Box
-        list_window = Window(
-            title="LIST",
-            x=start_x + 6 * (window_width + window_gap), y=start_y,
-            width=window_width, height=window_height
-        )
-        list_x = list_window.x + 10
-        list_y_start = list_window.y + title_bar_height + 10
-        listbox = ListBox(list_x, list_y_start, window_width - 20, 100, ["ITEM 1", "ITEM 2", "ITEM 3", "ITEM 4", "ITEM 5"])
+        # Window 7: List Box (row 1, col 2)
+        wx, wy = get_window_pos(6)
+        list_window = Window(title="LIST", x=wx, y=wy, width=window_width, height=window_height)
+        listbox = ListBox(wx + 15, wy + title_bar_height + 15, window_width - 30, 150,
+                         ["ITEM 1", "ITEM 2", "ITEM 3", "ITEM 4", "ITEM 5"])
         listbox.select_index(0)
         list_window.add_component(listbox)
         gui.add_window(list_window)
 
-        # Window 8: Image Display
-        image_window = Window(
-            title="IMAGE",
-            x=start_x + 7 * (window_width + window_gap), y=start_y,
-            width=window_width, height=window_height
-        )
-        image_x = image_window.x + 10
-        image_y_start = image_window.y + title_bar_height + 10
+        # Window 8: Image Display (row 1, col 3)
+        wx, wy = get_window_pos(7)
+        image_window = Window(title="IMAGE", x=wx, y=wy, width=window_width, height=window_height)
         demo_dir = Path(__file__).parent.parent / "demo"
         image_path = str(demo_dir / "squirel.png")
         img_display = ImageDisplay(
-            x=image_x, y=image_y_start,
-            width=window_width - 20, height=100,
+            x=wx + 15, y=wy + title_bar_height + 15,
+            width=window_width - 30, height=150,
             image_path=image_path
         )
         image_window.add_component(img_display)
@@ -306,16 +274,19 @@ class TestFullGUIScreenshot:
         return gui
 
     def test_generate_full_gui_screenshot(self, screenshot_dir):
-        """Generate screenshot of complete GUI demo."""
+        """Generate screenshot of complete GUI demo (2 rows of 4 windows)."""
         # Create full demo GUI
         gui = self._create_demo_gui()
 
-        # Create renderer with dimensions for 8 windows
-        # 8 windows * 160px + 7 gaps * 10px + 2 margins * 10px = 1370px
-        renderer = GUIRenderer(width=1370, height=180)
+        # Create renderer with dimensions for 2 rows x 4 columns
+        # Width: 15 + 4*(240+15) = 1035px
+        # Height: 15 + 2*(210+15) + 30 (instructions) = 495px
+        canvas_width = 1035
+        canvas_height = 495
+        renderer = GUIRenderer(width=canvas_width, height=canvas_height)
 
-        # Render to pixel buffer (we need to access internal rendering)
-        pixels = create_pixel_buffer(1370, 180, COLOR_INDICES["background"])
+        # Render to pixel buffer
+        pixels = create_pixel_buffer(canvas_width, canvas_height, COLOR_INDICES["background"])
 
         # Render each window
         for window in gui.windows:
@@ -329,31 +300,31 @@ class TestFullGUIScreenshot:
 
         assert img is not None
         assert output_path.exists()
-        assert img.size == (1370, 180)
+        assert img.size == (canvas_width, canvas_height)
 
     def test_generate_focused_button_screenshot(self, screenshot_dir):
         """Generate screenshot showing focused button state."""
         gui = GUIState()
 
-        # Create buttons window with one focused
-        btn_window = Window(title="BUTTONS", x=10, y=10, width=160, height=140)
+        # Create buttons window with one focused (1.5x scale)
+        btn_window = Window(title="BUTTONS", x=15, y=15, width=240, height=210)
         btn_window.active = True
 
-        btn1 = Button(20, 44, 140, 28, "FOCUSED")
+        btn1 = Button(30, 66, 210, 42, "FOCUSED")
         btn1.state = ComponentState.FOCUSED
         btn_window.add_component(btn1)
 
-        btn2 = Button(20, 79, 140, 28, "NORMAL")
+        btn2 = Button(30, 119, 210, 42, "NORMAL")
         btn_window.add_component(btn2)
 
-        btn3 = Button(20, 114, 140, 28, "PRESSED")
+        btn3 = Button(30, 172, 210, 42, "PRESSED")
         btn3.state = ComponentState.PRESSED
         btn_window.add_component(btn3)
 
         gui.add_window(btn_window)
 
-        renderer = GUIRenderer(width=180, height=170)
-        pixels = create_pixel_buffer(180, 170, COLOR_INDICES["background"])
+        renderer = GUIRenderer(width=270, height=240)
+        pixels = create_pixel_buffer(270, 240, COLOR_INDICES["background"])
 
         for window in gui.windows:
             renderer._render_window(pixels, window)
