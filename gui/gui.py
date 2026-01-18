@@ -12,11 +12,16 @@ SOLID Principles Applied:
 - Dependency Inversion: High-level modules depend on abstractions (Component protocol)
 """
 
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Protocol, Tuple, List, Optional, Callable, runtime_checkable
+
+# Platform detection for UI scaling
+IS_MACOS = sys.platform == 'darwin'
+PLATFORM_SCALE = 2 if IS_MACOS else 1
 
 try:
     from PIL import Image
@@ -530,7 +535,7 @@ class ListBox(Component):
         self._selected_index = -1
         self._hover_index = -1
         self._on_select = on_select
-        self._item_height = 30  # 1.5x from 20
+        self._item_height = 30 * PLATFORM_SCALE  # Scaled for platform
         self._scroll_offset = 0
 
     @property
