@@ -12,6 +12,7 @@ from sixel import (
     sixel_to_png,
     verify_sixel_roundtrip,
     create_pixel_buffer,
+    clear_pixel_buffer,
     fill_rect,
     draw_text,
     get_text_width,
@@ -69,6 +70,14 @@ class GameRenderer:
         self.game_area_y = self.title_height
         self.game_area_x = (self.frame_width - self.game_size) // 2
 
+        # Reusable pixel buffer (optimization: avoid allocation per frame)
+        self._pixels = create_pixel_buffer(
+            self.frame_width,
+            self.frame_height,
+            COLOR_INDICES["background"]
+        )
+        self._bg_color = COLOR_INDICES["background"]
+
     def render_frame(self, show_game_over: bool = False) -> str:
         """
         Render the complete frame as a sixel string.
@@ -79,11 +88,9 @@ class GameRenderer:
         Returns:
             Sixel escape sequence string
         """
-        pixels = create_pixel_buffer(
-            self.frame_width,
-            self.frame_height,
-            COLOR_INDICES["background"]
-        )
+        # Clear reusable pixel buffer (optimization: faster than creating new)
+        clear_pixel_buffer(self._pixels, self._bg_color)
+        pixels = self._pixels
 
         self._draw_frame_border(pixels)
         self._draw_title(pixels)

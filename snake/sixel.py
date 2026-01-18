@@ -110,8 +110,15 @@ def generate_palette() -> str:
 
 
 def create_pixel_buffer(width: int, height: int, fill: int = 0) -> List[List[int]]:
-    """Create a 2D pixel buffer filled with a color index."""
-    return [[fill for _ in range(width)] for _ in range(height)]
+    """Create a 2D pixel buffer filled with a color index (optimized with list multiplication)."""
+    return [[fill] * width for _ in range(height)]
+
+
+def clear_pixel_buffer(pixels: List[List[int]], fill: int = 0) -> None:
+    """Clear an existing pixel buffer (faster than creating new one)."""
+    for row in pixels:
+        for i in range(len(row)):
+            row[i] = fill
 
 
 def set_pixel(pixels: List[List[int]], x: int, y: int, color_idx: int) -> None:
@@ -182,7 +189,7 @@ def get_text_width(text: str, scale: int = 1) -> int:
 
 def _encode_rle(sixel_chars: List[int]) -> str:
     """
-    Encode a list of sixel values using Run-Length Encoding.
+    Encode a list of sixel values using Run-Length Encoding (optimized).
 
     In sixel, !n<char> means repeat <char> n times.
     This dramatically reduces output size for solid-color areas.
@@ -191,33 +198,44 @@ def _encode_rle(sixel_chars: List[int]) -> str:
         return ""
 
     result = []
+    n = len(sixel_chars)
     i = 0
-    while i < len(sixel_chars):
+
+    while i < n:
         char = sixel_chars[i]
-        count = 1
+        j = i + 1
 
-        # Count consecutive identical values
-        while i + count < len(sixel_chars) and sixel_chars[i + count] == char:
-            count += 1
+        # Count consecutive identical values (optimized loop)
+        while j < n and sixel_chars[j] == char:
+            j += 1
 
+        count = j - i
         sixel_char = chr(63 + char)
+
         if count >= 3:
             # Use RLE for 3+ repetitions
             result.append(f"!{count}{sixel_char}")
+        elif count == 2:
+            # Special case: two chars is same length as !2x, just use chars
+            result.append(sixel_char)
+            result.append(sixel_char)
         else:
-            # Output individual characters for short runs
-            result.append(sixel_char * count)
+            # Single character
+            result.append(sixel_char)
 
-        i += count
+        i = j
 
     return "".join(result)
 
 
 def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
     """
-    Convert a 2D pixel buffer to a sixel string.
+    Convert a 2D pixel buffer to a sixel string (optimized).
 
     Uses RLE compression for efficient encoding of large solid-color areas.
+    Optimizations:
+    - Per-band color detection (only scans colors in current 6-row band)
+    - Pre-computed bit masks for faster sixel value calculation
 
     Args:
         pixels: 2D array of color indices [y][x]
@@ -232,29 +250,34 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
     parts.append(f'"1;1;{width};{height}')
     parts.append(generate_palette())
 
-    # Get all colors used (including background for proper rendering)
-    colors_used = set()
-    colors_used.add(0)  # Always include background
-    for row in pixels:
-        for pixel in row:
-            colors_used.add(pixel)
+    # Pre-computed bit masks for faster sixel value calculation
+    bit_masks = [1, 2, 4, 8, 16, 32]
 
     # Process in bands of 6 rows
     for band_start in range(0, height, 6):
         if band_start > 0:
             parts.append(SIXEL_NEWLINE)
 
+        # Calculate band boundaries
+        band_end = min(band_start + 6, height)
+        num_rows = band_end - band_start
+
+        # Get colors used in this band only (optimization: don't scan entire image)
+        band_rows = [pixels[y] for y in range(band_start, band_end)]
+        colors_in_band = set()
+        for row in band_rows:
+            colors_in_band.update(row)
+
         # For each color, output the sixel data for this band
         first_color = True
-        for color_idx in sorted(colors_used):
+        for color_idx in sorted(colors_in_band):
             # Build sixel values for this color in this band
             sixel_values = []
             for x in range(width):
                 sixel_value = 0
-                for bit in range(6):
-                    y = band_start + bit
-                    if y < height and pixels[y][x] == color_idx:
-                        sixel_value |= (1 << bit)
+                for bit in range(num_rows):
+                    if band_rows[bit][x] == color_idx:
+                        sixel_value |= bit_masks[bit]
                 sixel_values.append(sixel_value)
 
             # Skip this color if all values are zero (no pixels of this color)
