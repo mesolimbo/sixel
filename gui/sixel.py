@@ -115,9 +115,10 @@ def register_image_colors(colors: List[Tuple[int, int, int]]) -> Dict[Tuple[int,
     Returns:
         Dictionary mapping RGB tuples to their palette indices
     """
-    global _NEXT_IMAGE_COLOR_INDEX
+    global _NEXT_IMAGE_COLOR_INDEX, _ITERM2_COLOR_TABLE
 
     color_map = {}
+    new_colors_added = False
     for rgb in colors:
         if rgb in _IMAGE_COLORS:
             color_map[rgb] = _IMAGE_COLORS[rgb]
@@ -125,6 +126,11 @@ def register_image_colors(colors: List[Tuple[int, int, int]]) -> Dict[Tuple[int,
             _IMAGE_COLORS[rgb] = _NEXT_IMAGE_COLOR_INDEX
             color_map[rgb] = _NEXT_IMAGE_COLOR_INDEX
             _NEXT_IMAGE_COLOR_INDEX += 1
+            new_colors_added = True
+
+    # Invalidate iTerm2 color cache if new colors were added
+    if new_colors_added:
+        _ITERM2_COLOR_TABLE = None
 
     return color_map
 
@@ -758,14 +764,38 @@ def pixels_to_png(
     return img
 
 
+# Cache for iTerm2 color lookup table (built once, reused)
+_ITERM2_COLOR_TABLE: Optional[List[Tuple[int, int, int]]] = None
+
+
+def _get_iterm2_color_table() -> List[Tuple[int, int, int]]:
+    """Get or build the color lookup table for fast iTerm2 encoding."""
+    global _ITERM2_COLOR_TABLE
+    if _ITERM2_COLOR_TABLE is None:
+        color_map = _get_color_index_to_rgb()
+        # Build a list indexed by color index for O(1) lookup
+        max_idx = max(color_map.keys()) + 1 if color_map else 256
+        _ITERM2_COLOR_TABLE = [(0, 0, 0)] * max_idx
+        for idx, rgb in color_map.items():
+            if idx < max_idx:
+                _ITERM2_COLOR_TABLE[idx] = rgb
+    return _ITERM2_COLOR_TABLE
+
+
+def invalidate_iterm2_color_cache() -> None:
+    """Invalidate the iTerm2 color cache (call after registering new image colors)."""
+    global _ITERM2_COLOR_TABLE
+    _ITERM2_COLOR_TABLE = None
+
+
 def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
     """
     Convert a 2D pixel buffer to an iTerm2 inline image escape sequence.
 
-    This is much faster than sixel encoding on iTerm2 because:
-    - No palette quantization needed
-    - PNG compression is more efficient than sixel RLE
-    - iTerm2 handles the image natively without pixel re-processing
+    Optimized for speed with:
+    - Pre-built color lookup table for O(1) access
+    - Minimal PNG compression (compress_level=0)
+    - Direct byte array construction
 
     Args:
         pixels: 2D array of color indices
@@ -779,22 +809,30 @@ def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
         # Fall back to sixel if PIL not available
         return pixels_to_sixel(pixels, width, height)
 
-    # Create PIL Image directly from pixel data
-    img = Image.new("RGB", (width, height))
-    color_map = _get_color_index_to_rgb()
+    # Get cached color table for fast lookup
+    color_table = _get_iterm2_color_table()
+    table_len = len(color_table)
 
-    # Build image data
-    img_data = []
+    # Build raw RGB bytes directly (much faster than putdata with tuples)
+    rgb_bytes = bytearray(width * height * 3)
+    idx = 0
     for row in pixels:
         for color_idx in row:
-            rgb = color_map.get(color_idx, (0, 0, 0))
-            img_data.append(rgb)
+            if color_idx < table_len:
+                r, g, b = color_table[color_idx]
+            else:
+                r, g, b = 0, 0, 0
+            rgb_bytes[idx] = r
+            rgb_bytes[idx + 1] = g
+            rgb_bytes[idx + 2] = b
+            idx += 3
 
-    img.putdata(img_data)
+    # Create image from raw bytes (faster than putdata)
+    img = Image.frombytes("RGB", (width, height), bytes(rgb_bytes))
 
-    # Encode to PNG in memory
+    # Encode to PNG with no compression for speed
     buffer = io.BytesIO()
-    img.save(buffer, format='PNG', optimize=False, compress_level=1)
+    img.save(buffer, format='PNG', compress_level=0)
     png_data = buffer.getvalue()
 
     # Base64 encode

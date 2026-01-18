@@ -72,8 +72,8 @@ class GUIRenderer:
         """
         self.width = width
         self.height = height
-        # Font scale: keep consistent at 2 for all platforms
-        self.scale = 2
+        # Font scale: 4 on macOS with iTerm2 (matches 2x UI scaling), 2 elsewhere
+        self.scale = 4 if (IS_MACOS and _IS_ITERM2) else 2
         self.bold = True
         self._platform_scale = PLATFORM_SCALE
 
