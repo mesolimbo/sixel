@@ -214,19 +214,23 @@ class UnixTerminal(Terminal):
         """
         Read any input (key or mouse) with optional timeout.
 
-        Uses select for non-blocking input check.
+        Uses select for non-blocking input check and os.read for
+        consistent raw byte reading (important for escape sequences on macOS).
         """
         # Use select to check if input is available
         if timeout == 0:
-            rlist, _, _ = select.select([sys.stdin], [], [], 0)
+            rlist, _, _ = select.select([self._fd], [], [], 0)
         else:
-            rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+            rlist, _, _ = select.select([self._fd], [], [], timeout)
 
         if not rlist:
             return None
 
-        # Read the first character
-        char = sys.stdin.read(1)
+        # Read the first character using os.read for consistent raw byte handling
+        data = os.read(self._fd, 1)
+        if not data:
+            return None
+        char = data.decode('utf-8', errors='replace')
 
         # Handle escape sequences
         if char == '\x1b':
