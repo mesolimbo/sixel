@@ -223,10 +223,17 @@ def create_pixel_buffer(width: int, height: int, fill: int = 0) -> List[List[int
 
 
 def clear_pixel_buffer(pixels: List[List[int]], fill: int = 0) -> None:
-    """Clear an existing pixel buffer (faster than creating new one)."""
+    """Clear an existing pixel buffer (faster than creating new one).
+
+    Uses slice assignment which is much faster than per-element assignment
+    for large buffers (e.g., 2070x990 on macOS).
+    """
+    if not pixels:
+        return
+    width = len(pixels[0])
+    fill_row = [fill] * width  # Create once, reuse for slice assignment
     for row in pixels:
-        for i in range(len(row)):
-            row[i] = fill
+        row[:] = fill_row  # Slice assignment is faster than per-element
 
 
 def set_pixel(pixels: List[List[int]], x: int, y: int, color_idx: int) -> None:
@@ -606,6 +613,9 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
     # Pre-compute bit masks for speed
     bit_masks = [1, 2, 4, 8, 16, 32]
 
+    # Get background color index for optimization
+    bg_color = COLOR_INDICES.get("background", 0)
+
     for band_start in range(0, height, 6):
         if band_start > 0:
             parts.append(SIXEL_NEWLINE)
@@ -615,10 +625,21 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
         band_rows = [pixels[y] for y in range(band_start, band_end)]
         num_rows = len(band_rows)
 
-        # Find colors used in this band only
+        # Find colors used in this band only (excluding background for optimization)
         colors_in_band = set()
         for row in band_rows:
-            colors_in_band.update(row)
+            for pixel in row:
+                if pixel != bg_color:
+                    colors_in_band.add(pixel)
+
+        # Fast path: if band only has background, output a single background run
+        if not colors_in_band:
+            # Output background color as a single RLE run for the whole band
+            parts.append(f"#{bg_color}!{width}?")  # '?' is sixel char for value 0 (no bits set)
+            continue
+
+        # Add background to colors to render (needed for proper display)
+        colors_in_band.add(bg_color)
 
         first_color = True
         for color_idx in sorted(colors_in_band):
