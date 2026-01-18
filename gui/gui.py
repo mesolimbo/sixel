@@ -530,7 +530,7 @@ class ListBox(Component):
         self._selected_index = -1
         self._hover_index = -1
         self._on_select = on_select
-        self._item_height = 40  # Doubled from 20
+        self._item_height = 30  # 1.5x from 20
         self._scroll_offset = 0
 
     @property
