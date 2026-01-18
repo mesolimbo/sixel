@@ -337,11 +337,49 @@ class WindowsTerminal(Terminal):
 
     def get_cursor_position(self) -> Optional[Tuple[int, int]]:
         """
-        Get current cursor position.
+        Get current cursor position by querying the terminal.
 
-        Note: With VT mouse tracking, coordinates are relative to the
-        visible window, so we return None to indicate no offset needed.
+        Sends the DSR (Device Status Report) escape sequence and parses
+        the CPR (Cursor Position Report) response.
+
+        Returns:
+            Tuple of (row, col) 1-indexed, or None if query fails.
         """
+        # Send cursor position query
+        self.write('\x1b[6n')
+        self.flush()
+
+        # Read response: ESC [ row ; col R
+        response = ""
+        start_time = time.time()
+        timeout = 0.1  # 100ms timeout
+
+        while (time.time() - start_time) < timeout:
+            if self._msvcrt.kbhit():
+                ch = self._msvcrt.getch()
+                try:
+                    char = ch.decode('latin-1')
+                    response += char
+                    # Response ends with 'R'
+                    if char == 'R':
+                        break
+                except:
+                    continue
+            else:
+                time.sleep(0.001)
+
+        # Parse response: ESC [ row ; col R
+        if response.startswith('\x1b[') and response.endswith('R'):
+            try:
+                coords = response[2:-1]  # Remove ESC [ and R
+                parts = coords.split(';')
+                if len(parts) == 2:
+                    row = int(parts[0])
+                    col = int(parts[1])
+                    return (row, col)
+            except (ValueError, IndexError):
+                pass
+
         return None
 
     def hide_cursor(self) -> None:
