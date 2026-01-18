@@ -5,11 +5,17 @@ Parses YAML configuration files to build GUI layouts with windows and widgets.
 Supports variable bindings between widgets for reactive updates.
 """
 
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 from dataclasses import dataclass, field
 
 import yaml
+
+# Platform detection for UI scaling
+IS_MACOS = sys.platform == 'darwin'
+# Double the size on macOS for better visibility in iTerm2
+PLATFORM_SCALE = 2 if IS_MACOS else 1
 
 from gui import (
     GUIState,
@@ -64,16 +70,17 @@ def load_config(config_path: str) -> Dict[str, Any]:
 
 
 def parse_layout(config: Dict[str, Any]) -> LayoutConfig:
-    """Parse layout configuration from YAML."""
+    """Parse layout configuration from YAML with platform scaling."""
     layout_data = config.get('layout', {})
+    scale = PLATFORM_SCALE
     return LayoutConfig(
-        window_width=layout_data.get('window_width', 240),
-        window_height=layout_data.get('window_height', 210),
-        window_gap=layout_data.get('window_gap', 15),
-        start_x=layout_data.get('start_x', 15),
-        start_y=layout_data.get('start_y', 15),
-        title_bar_height=layout_data.get('title_bar_height', 36),
-        content_padding=layout_data.get('content_padding', 15),
+        window_width=layout_data.get('window_width', 240) * scale,
+        window_height=layout_data.get('window_height', 210) * scale,
+        window_gap=layout_data.get('window_gap', 15) * scale,
+        start_x=layout_data.get('start_x', 15) * scale,
+        start_y=layout_data.get('start_y', 15) * scale,
+        title_bar_height=layout_data.get('title_bar_height', 36) * scale,
+        content_padding=layout_data.get('content_padding', 15) * scale,
     )
 
 
@@ -101,10 +108,11 @@ def create_widget(
     """Create a widget from configuration."""
     widget_type = widget_config.get('type')
     widget_id = widget_config.get('id')
-    height = widget_config.get('height', 36)
+    scale = PLATFORM_SCALE
+    height = widget_config.get('height', 36) * scale
 
-    # Calculate width - can be adjusted with width_offset
-    width_offset = widget_config.get('width_offset', 0)
+    # Calculate width - can be adjusted with width_offset (also scaled)
+    width_offset = widget_config.get('width_offset', 0) * scale
     width = default_width + width_offset
 
     widget: Optional[Component] = None
@@ -198,21 +206,22 @@ def create_widget(
 def calculate_widget_spacing(widget_config: Dict[str, Any]) -> int:
     """Calculate vertical spacing for a widget based on its type and height."""
     widget_type = widget_config.get('type')
-    height = widget_config.get('height', 36)
+    scale = PLATFORM_SCALE
+    height = widget_config.get('height', 36) * scale
 
-    # Different widget types have different default spacing
+    # Different widget types have different default spacing (scaled)
     spacing_map = {
-        'button': 11,      # 42 + 11 = 53 (from original: 68 - 15 = 53)
-        'checkbox': 9,     # 36 + 9 = 45
-        'radio': 9,        # 36 + 9 = 45
-        'text_input': 15,  # 42 + 15 = 57
-        'slider': 22,      # 30 + 22 = 52
-        'progress_bar': 16, # 36 + 16 = 52
+        'button': 11 * scale,      # 42 + 11 = 53 (from original: 68 - 15 = 53)
+        'checkbox': 9 * scale,     # 36 + 9 = 45
+        'radio': 9 * scale,        # 36 + 9 = 45
+        'text_input': 15 * scale,  # 42 + 15 = 57
+        'slider': 22 * scale,      # 30 + 22 = 52
+        'progress_bar': 16 * scale, # 36 + 16 = 52
         'listbox': 0,
         'image': 0,
     }
 
-    base_spacing = spacing_map.get(widget_type, 10)
+    base_spacing = spacing_map.get(widget_type, 10 * scale)
     return height + base_spacing
 
 
@@ -271,7 +280,7 @@ def build_gui_from_config(config_path: str) -> tuple[GUIState, GUIConfig, int, i
             if widgets:
                 first_widget_type = widgets[0].get('type')
                 if first_widget_type in ('slider', 'progress_bar'):
-                    content_y += 7  # Extra top offset for sliders/progress bars
+                    content_y += 7 * PLATFORM_SCALE  # Extra top offset for sliders/progress bars
 
             current_y = content_y
 
@@ -302,7 +311,7 @@ def build_gui_from_config(config_path: str) -> tuple[GUIState, GUIConfig, int, i
         num_rows * layout.window_height +
         (num_rows - 1) * layout.window_gap +
         2 * layout.start_y +
-        30  # Extra space for instructions
+        30 * PLATFORM_SCALE  # Extra space for instructions
     )
 
     return gui, gui_config, frame_width, frame_height

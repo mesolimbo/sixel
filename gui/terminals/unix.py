@@ -51,6 +51,7 @@ class UnixTerminal(Terminal):
         self._mouse_enabled: bool = False
         self._old_settings: Optional[List] = None
         self._fd = sys.stdin.fileno()
+        self._is_macos: bool = sys.platform == 'darwin'
 
     @property
     def is_raw(self) -> bool:
@@ -159,30 +160,46 @@ class UnixTerminal(Terminal):
         """Read a complete escape sequence from input."""
         seq = '\x1b'
 
-        # Read next character
-        rlist, _, _ = select.select([sys.stdin], [], [], 0.05)
+        # Use longer timeout on macOS for reliable escape sequence reading
+        esc_timeout = 0.1 if self._is_macos else 0.05
+
+        # Read next character using os.read for more reliable raw byte reading
+        rlist, _, _ = select.select([self._fd], [], [], esc_timeout)
         if not rlist:
             return seq
 
-        char = sys.stdin.read(1)
+        data = os.read(self._fd, 1)
+        if not data:
+            return seq
+        char = data.decode('utf-8', errors='replace')
         seq += char
 
-        if char != '[':
-            return seq
-
-        # CSI sequence - read until we hit a letter
-        while True:
-            rlist, _, _ = select.select([sys.stdin], [], [], 0.05)
-            if not rlist:
-                break
-            char = sys.stdin.read(1)
-            seq += char
-            # Letters (except for '<' which starts SGR mouse) terminate CSI
-            if char.isalpha() or char == '~':
-                break
-            # SGR mouse sequence continues until M or m
-            if seq.startswith('\x1b[<') and char in 'Mm':
-                break
+        # Handle both CSI sequences (ESC [) and SS3 sequences (ESC O)
+        if char == '[':
+            # CSI sequence - read until we hit a letter
+            while True:
+                rlist, _, _ = select.select([self._fd], [], [], esc_timeout)
+                if not rlist:
+                    break
+                data = os.read(self._fd, 1)
+                if not data:
+                    break
+                char = data.decode('utf-8', errors='replace')
+                seq += char
+                # Letters (except for '<' which starts SGR mouse) terminate CSI
+                if char.isalpha() or char == '~':
+                    break
+                # SGR mouse sequence continues until M or m
+                if seq.startswith('\x1b[<') and char in 'Mm':
+                    break
+        elif char == 'O':
+            # SS3 sequence - some terminals (especially macOS) use this for arrows
+            rlist, _, _ = select.select([self._fd], [], [], esc_timeout)
+            if rlist:
+                data = os.read(self._fd, 1)
+                if data:
+                    char = data.decode('utf-8', errors='replace')
+                    seq += char
 
         return seq
 
@@ -222,17 +239,24 @@ class UnixTerminal(Terminal):
                     return mouse_event
                 return KeyEvent.special('unknown-mouse')
 
-            # Check for arrow keys
-            if len(seq) >= 3 and seq[1] == '[':
+            # Check for arrow keys - both CSI (ESC [) and SS3 (ESC O) formats
+            if len(seq) >= 3:
                 arrow_map = {
                     'A': 'up',
                     'B': 'down',
                     'C': 'right',
                     'D': 'left',
                 }
-                if seq[2] in arrow_map:
-                    return KeyEvent.arrow(arrow_map[seq[2]])
-                return KeyEvent.special(f'csi-{seq[2]}')
+                # CSI format: ESC [ A/B/C/D
+                if seq[1] == '[':
+                    if seq[2] in arrow_map:
+                        return KeyEvent.arrow(arrow_map[seq[2]])
+                    return KeyEvent.special(f'csi-{seq[2]}')
+                # SS3 format: ESC O A/B/C/D (used by some macOS terminals)
+                elif seq[1] == 'O':
+                    if seq[2] in arrow_map:
+                        return KeyEvent.arrow(arrow_map[seq[2]])
+                    return KeyEvent.special(f'ss3-{seq[2]}')
 
             return KeyEvent.special('escape')
 

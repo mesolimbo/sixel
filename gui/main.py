@@ -38,20 +38,28 @@ from gui import (
     ListBox,
     ImageDisplay,
 )
-from config import build_gui_from_config, apply_bindings
+from config import build_gui_from_config, apply_bindings, PLATFORM_SCALE
 
 
 def create_demo_gui() -> GUIState:
     """Create the demo GUI with 8 windows showcasing different components."""
     gui = GUIState()
 
-    # Layout constants (1.5x scale for better display on macOS)
-    window_width = 240
-    window_height = 210
-    window_gap = 15
-    start_x = 15
-    start_y = 15
-    title_bar_height = 36
+    # Layout constants with platform scaling (2x on macOS for better visibility)
+    scale = PLATFORM_SCALE
+    window_width = 240 * scale
+    window_height = 210 * scale
+    window_gap = 15 * scale
+    start_x = 15 * scale
+    start_y = 15 * scale
+    title_bar_height = 36 * scale
+
+    # Common scaled dimensions
+    padding = 15 * scale
+    btn_height = 42 * scale
+    cb_height = 36 * scale
+    slider_height = 30 * scale
+    listbox_height = 150 * scale
 
     # ============================================================
     # Window 1: Buttons
@@ -66,28 +74,28 @@ def create_demo_gui() -> GUIState:
 
     # Primary button
     btn_window.add_component(Button(
-        x=start_x + 15,
-        y=start_y + title_bar_height + 15,
-        width=window_width - 30,
-        height=42,
+        x=start_x + padding,
+        y=start_y + title_bar_height + padding,
+        width=window_width - 2 * padding,
+        height=btn_height,
         label="PRIMARY"
     ))
 
     # Secondary button
     btn_window.add_component(Button(
-        x=start_x + 15,
-        y=start_y + title_bar_height + 68,
-        width=window_width - 30,
-        height=42,
+        x=start_x + padding,
+        y=start_y + title_bar_height + 68 * scale,
+        width=window_width - 2 * padding,
+        height=btn_height,
         label="SECONDARY"
     ))
 
     # Disabled button
     disabled_btn = Button(
-        x=start_x + 15,
-        y=start_y + title_bar_height + 121,
-        width=window_width - 30,
-        height=42,
+        x=start_x + padding,
+        y=start_y + title_bar_height + 121 * scale,
+        width=window_width - 2 * padding,
+        height=btn_height,
         label="DISABLED"
     )
     disabled_btn.enabled = False
@@ -106,26 +114,26 @@ def create_demo_gui() -> GUIState:
         height=window_height
     )
 
-    cb_x = cb_window.x + 15
-    cb_y_start = cb_window.y + title_bar_height + 15
+    cb_x = cb_window.x + padding
+    cb_y_start = cb_window.y + title_bar_height + padding
 
     cb_window.add_component(Checkbox(
         x=cb_x, y=cb_y_start,
-        width=window_width - 30, height=36,
+        width=window_width - 2 * padding, height=cb_height,
         label="OPTION A",
         checked=True
     ))
 
     cb_window.add_component(Checkbox(
-        x=cb_x, y=cb_y_start + 45,
-        width=window_width - 30, height=36,
+        x=cb_x, y=cb_y_start + 45 * scale,
+        width=window_width - 2 * padding, height=cb_height,
         label="OPTION B",
         checked=False
     ))
 
     cb_window.add_component(Checkbox(
-        x=cb_x, y=cb_y_start + 90,
-        width=window_width - 30, height=36,
+        x=cb_x, y=cb_y_start + 90 * scale,
+        width=window_width - 2 * padding, height=cb_height,
         label="OPTION C",
         checked=True
     ))
@@ -144,12 +152,12 @@ def create_demo_gui() -> GUIState:
     )
 
     radio_group = RadioGroup()
-    radio_x = radio_window.x + 15
-    radio_y_start = radio_window.y + title_bar_height + 15
+    radio_x = radio_window.x + padding
+    radio_y_start = radio_window.y + title_bar_height + padding
 
     rb1 = RadioButton(
         x=radio_x, y=radio_y_start,
-        width=window_width - 30, height=36,
+        width=window_width - 2 * padding, height=cb_height,
         label="SMALL",
         selected=True
     )
@@ -157,16 +165,16 @@ def create_demo_gui() -> GUIState:
     radio_window.add_component(rb1)
 
     rb2 = RadioButton(
-        x=radio_x, y=radio_y_start + 45,
-        width=window_width - 30, height=36,
+        x=radio_x, y=radio_y_start + 45 * scale,
+        width=window_width - 2 * padding, height=cb_height,
         label="MEDIUM"
     )
     radio_group.add_button(rb2)
     radio_window.add_component(rb2)
 
     rb3 = RadioButton(
-        x=radio_x, y=radio_y_start + 90,
-        width=window_width - 30, height=36,
+        x=radio_x, y=radio_y_start + 90 * scale,
+        width=window_width - 2 * padding, height=cb_height,
         label="LARGE"
     )
     radio_group.add_button(rb3)
@@ -185,26 +193,26 @@ def create_demo_gui() -> GUIState:
         height=window_height
     )
 
-    input_x = input_window.x + 15
-    input_y_start = input_window.y + title_bar_height + 15
+    input_x = input_window.x + padding
+    input_y_start = input_window.y + title_bar_height + padding
 
     input_window.add_component(TextInput(
         x=input_x, y=input_y_start,
-        width=window_width - 30, height=42,
+        width=window_width - 2 * padding, height=btn_height,
         placeholder="NAME...",
         max_length=100
     ))
 
     input_window.add_component(TextInput(
-        x=input_x, y=input_y_start + 57,
-        width=window_width - 30, height=42,
+        x=input_x, y=input_y_start + 57 * scale,
+        width=window_width - 2 * padding, height=btn_height,
         placeholder="EMAIL...",
         max_length=100
     ))
 
     input_window.add_component(TextInput(
-        x=input_x, y=input_y_start + 114,
-        width=window_width - 30, height=42,
+        x=input_x, y=input_y_start + 114 * scale,
+        width=window_width - 2 * padding, height=btn_height,
         placeholder="PASSWORD...",
         max_length=100
     ))
@@ -224,24 +232,24 @@ def create_demo_gui() -> GUIState:
         height=window_height
     )
 
-    slider_x = slider_window.x + 15
-    slider_y_start = slider_window.y + title_bar_height + 22
+    slider_x = slider_window.x + padding
+    slider_y_start = slider_window.y + title_bar_height + 22 * scale
 
     slider_window.add_component(Slider(
         x=slider_x, y=slider_y_start,
-        width=window_width - 75, height=30,
+        width=window_width - 75 * scale, height=slider_height,
         min_value=0, max_value=100, value=25
     ))
 
     slider_window.add_component(Slider(
-        x=slider_x, y=slider_y_start + 52,
-        width=window_width - 75, height=30,
+        x=slider_x, y=slider_y_start + 52 * scale,
+        width=window_width - 75 * scale, height=slider_height,
         min_value=0, max_value=100, value=50
     ))
 
     slider_window.add_component(Slider(
-        x=slider_x, y=slider_y_start + 104,
-        width=window_width - 75, height=30,
+        x=slider_x, y=slider_y_start + 104 * scale,
+        width=window_width - 75 * scale, height=slider_height,
         min_value=0, max_value=100, value=75
     ))
 
@@ -258,24 +266,24 @@ def create_demo_gui() -> GUIState:
         height=window_height
     )
 
-    progress_x = progress_window.x + 15
-    progress_y_start = progress_window.y + title_bar_height + 22
+    progress_x = progress_window.x + padding
+    progress_y_start = progress_window.y + title_bar_height + 22 * scale
 
     progress_window.add_component(ProgressBar(
         x=progress_x, y=progress_y_start,
-        width=window_width - 30, height=36,
+        width=window_width - 2 * padding, height=cb_height,
         value=100, max_value=100
     ))
 
     progress_window.add_component(ProgressBar(
-        x=progress_x, y=progress_y_start + 52,
-        width=window_width - 30, height=36,
+        x=progress_x, y=progress_y_start + 52 * scale,
+        width=window_width - 2 * padding, height=cb_height,
         value=65, max_value=100
     ))
 
     progress_window.add_component(ProgressBar(
-        x=progress_x, y=progress_y_start + 104,
-        width=window_width - 30, height=36,
+        x=progress_x, y=progress_y_start + 104 * scale,
+        width=window_width - 2 * padding, height=cb_height,
         value=25, max_value=100
     ))
 
@@ -292,12 +300,12 @@ def create_demo_gui() -> GUIState:
         height=window_height
     )
 
-    list_x = list_window.x + 15
-    list_y_start = list_window.y + title_bar_height + 15
+    list_x = list_window.x + padding
+    list_y_start = list_window.y + title_bar_height + padding
 
     listbox = ListBox(
         x=list_x, y=list_y_start,
-        width=window_width - 30, height=150,
+        width=window_width - 2 * padding, height=listbox_height,
         items=["ITEM 1", "ITEM 2", "ITEM 3", "ITEM 4", "ITEM 5"]
     )
     listbox.select_index(0)
@@ -316,14 +324,14 @@ def create_demo_gui() -> GUIState:
         height=window_height
     )
 
-    image_x = image_window.x + 15
-    image_y_start = image_window.y + title_bar_height + 15
+    image_x = image_window.x + padding
+    image_y_start = image_window.y + title_bar_height + padding
 
     # Load the squirrel image
     image_path = str(Path(__file__).parent / "demo" / "squirel.png")
     image_display = ImageDisplay(
         x=image_x, y=image_y_start,
-        width=window_width - 30, height=150,
+        width=window_width - 2 * padding, height=listbox_height,
         image_path=image_path
     )
     image_window.add_component(image_display)
@@ -412,12 +420,13 @@ def main():
         link_sliders_to_progress_bars(gui)
         sync_callback = create_sync_callback(gui)
 
-        # Calculate dimensions for 2 rows of 4 windows
-        # Each window is 240px wide with 15px gap
+        # Calculate dimensions for 2 rows of 4 windows (with platform scaling)
+        # Each window is 240px wide with 15px gap (scaled on macOS)
         # Width: 4 * 240 + 3 * 15 + 30 (margins) = 1035
         # Height: 2 * 210 + 1 * 15 + 30 (margins) + 30 (instructions) = 495
-        width = 1035
-        height = 495
+        scale = PLATFORM_SCALE
+        width = 1035 * scale
+        height = 495 * scale
 
         if config_path:
             print(f"Config file not found: {config_path}")

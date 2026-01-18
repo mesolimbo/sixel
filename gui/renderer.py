@@ -5,8 +5,13 @@ Renders GUI components and windows as sixel graphics.
 Uses the component state to determine visual appearance.
 """
 
+import sys
 import time
 from typing import List, Optional, Tuple
+
+# Platform detection for UI scaling
+IS_MACOS = sys.platform == 'darwin'
+PLATFORM_SCALE = 2 if IS_MACOS else 1
 
 from sixel import (
     create_pixel_buffer,
@@ -60,14 +65,15 @@ class GUIRenderer:
         """
         self.width = width
         self.height = height
-        self.scale = 2  # Larger font for better readability
+        self.scale = 2 * PLATFORM_SCALE  # Larger font for better readability (scaled)
         self.bold = True
+        self._platform_scale = PLATFORM_SCALE
 
-        # Layout constants (1.5x scale for better display on macOS)
-        self.padding = 12
-        self.corner_radius = 6
-        self.title_bar_height = 36
-        self.component_padding = 9
+        # Layout constants (scaled for platform)
+        self.padding = 12 * PLATFORM_SCALE
+        self.corner_radius = 6 * PLATFORM_SCALE
+        self.title_bar_height = 36 * PLATFORM_SCALE
+        self.component_padding = 9 * PLATFORM_SCALE
 
         # Reusable pixel buffer (created once, cleared each frame)
         self._pixels = create_pixel_buffer(width, height, COLOR_INDICES["background"])
@@ -122,7 +128,7 @@ class GUIRenderer:
 
     def _draw_instructions(self, pixels: List[List[int]]) -> None:
         """Draw instruction text at the bottom of the frame."""
-        y = self.height - 30
+        y = self.height - 30 * self._platform_scale
         x = self.padding
 
         # Instructions
@@ -137,15 +143,16 @@ class GUIRenderer:
             return
 
         b = component.bounds
-        # Draw a highlight border 3 pixels outside the component (1.5x)
+        # Draw a highlight border outside the component (scaled)
         focus_color = COLOR_INDICES["input_focus"]
+        border_offset = 3 * self._platform_scale
 
-        # Draw outer border (3 pixels thick)
-        for offset in range(3):
-            x = b.x - 3 + offset
-            y = b.y - 3 + offset
-            w = b.width + 6 - offset * 2
-            h = b.height + 6 - offset * 2
+        # Draw outer border (scaled thickness)
+        for offset in range(border_offset):
+            x = b.x - border_offset + offset
+            y = b.y - border_offset + offset
+            w = b.width + 2 * border_offset - offset * 2
+            h = b.height + 2 * border_offset - offset * 2
             draw_rect_border(pixels, x, y, w, h, focus_color)
 
     def _render_window(self, pixels: List[List[int]], window: Window) -> None:
@@ -258,16 +265,18 @@ class GUIRenderer:
 
     def _render_checkbox(self, pixels: List[List[int]], checkbox: Checkbox) -> None:
         """Render a checkbox component."""
-        box_size = 24  # 1.5x from 16
+        box_size = 24 * self._platform_scale  # Scaled checkbox box
         box_x = checkbox.x
         box_y = checkbox.y + (checkbox.height - box_size) // 2
+        checkmark_padding = 3 * self._platform_scale
 
         # Checkbox box
         if checkbox.checked:
             fill_rect(pixels, box_x, box_y, box_size, box_size,
                      COLOR_INDICES["checkbox_checked"])
             # Draw checkmark
-            draw_checkmark(pixels, box_x + 3, box_y + 3, box_size - 6,
+            draw_checkmark(pixels, box_x + checkmark_padding, box_y + checkmark_padding,
+                          box_size - 2 * checkmark_padding,
                           COLOR_INDICES["text_highlight"])
         else:
             fill_rect(pixels, box_x, box_y, box_size, box_size,
@@ -278,15 +287,15 @@ class GUIRenderer:
                         COLOR_INDICES["checkbox_border"])
 
         # Label
-        label_x = box_x + box_size + 12  # 1.5x from 8
+        label_x = box_x + box_size + 12 * self._platform_scale
         label_y = checkbox.y + (checkbox.height - FONT_HEIGHT * self.scale) // 2
         text_color = COLOR_INDICES["text"] if checkbox.enabled else COLOR_INDICES["text_disabled"]
         draw_text(pixels, label_x, label_y, checkbox.label, text_color, self.scale, self.bold)
 
     def _render_radio_button(self, pixels: List[List[int]], radio: RadioButton) -> None:
         """Render a radio button component."""
-        circle_radius = 10  # 1.5x from 7
-        circle_cx = radio.x + circle_radius + 3  # 1.5x from 2
+        circle_radius = 10 * self._platform_scale  # Scaled circle
+        circle_cx = radio.x + circle_radius + 3 * self._platform_scale
         circle_cy = radio.y + radio.height // 2
 
         # Outer circle
@@ -295,11 +304,12 @@ class GUIRenderer:
 
         # Inner circle if selected
         if radio.selected:
-            draw_circle(pixels, circle_cx, circle_cy, circle_radius - 4,
+            inner_radius = circle_radius - 4 * self._platform_scale
+            draw_circle(pixels, circle_cx, circle_cy, inner_radius,
                        COLOR_INDICES["checkbox_checked"], filled=True)
 
         # Label
-        label_x = radio.x + circle_radius * 2 + 15  # 1.5x from 10
+        label_x = radio.x + circle_radius * 2 + 15 * self._platform_scale
         label_y = radio.y + (radio.height - FONT_HEIGHT * self.scale) // 2
         text_color = COLOR_INDICES["text"] if radio.enabled else COLOR_INDICES["text_disabled"]
         draw_text(pixels, label_x, label_y, radio.label, text_color, self.scale, self.bold)
@@ -320,7 +330,7 @@ class GUIRenderer:
         # Text content area bounds
         text_x = text_input.x + self.component_padding
         text_y = text_input.y + (text_input.height - FONT_HEIGHT * self.scale) // 2
-        cursor_width = 3  # 1.5x cursor width
+        cursor_width = 3 * self._platform_scale  # Scaled cursor width
         # Cursor gap: treat cursor like a character (half char width on each side)
         char_advance = (5 + 1) * self.scale  # FONT_WIDTH is 5
         cursor_gap = (char_advance - cursor_width) // 2  # ~4-5 pixels padding
@@ -387,7 +397,7 @@ class GUIRenderer:
 
     def _render_slider(self, pixels: List[List[int]], slider: Slider) -> None:
         """Render a slider component."""
-        thumb_width = 15  # 1.5x from 10
+        thumb_width = 15 * self._platform_scale  # Scaled thumb
         draw_slider(
             pixels, slider.x, slider.y,
             slider.width, slider.height,
@@ -401,7 +411,7 @@ class GUIRenderer:
 
         # Draw value label
         value_text = f"{slider.value:.0f}"
-        value_x = slider.x + slider.width + 12  # 1.5x from 8
+        value_x = slider.x + slider.width + 12 * self._platform_scale
         value_y = slider.y + (slider.height - FONT_HEIGHT * self.scale) // 2
         draw_text(pixels, value_x, value_y, value_text,
                  COLOR_INDICES["text"], self.scale, False)
@@ -517,10 +527,12 @@ class GUIRenderer:
         display_height = int(src_height * zoom_factor)
 
         # Calculate content area (inside border)
-        content_x = img_display.x + 2
-        content_y = img_display.y + 2
-        content_width = img_display.width - 4
-        content_height = img_display.height - 4 - 18  # 1.5x from 12
+        border_inset = 2 * self._platform_scale
+        zoom_label_height = 18 * self._platform_scale
+        content_x = img_display.x + border_inset
+        content_y = img_display.y + border_inset
+        content_width = img_display.width - 2 * border_inset
+        content_height = img_display.height - 2 * border_inset - zoom_label_height
 
         # Center the image in the content area
         start_x = content_x + (content_width - display_width) // 2
@@ -542,7 +554,7 @@ class GUIRenderer:
             zoom_text = f"1/{int(1/zoom_factor)}X"
         text_width = get_text_width(zoom_text, self.scale, False)
         text_x = img_display.x + (img_display.width - text_width) // 2
-        text_y = img_display.y + img_display.height - 16  # 1.5x from 11
+        text_y = img_display.y + img_display.height - 16 * self._platform_scale
         draw_text(pixels, text_x, text_y, zoom_text,
                  COLOR_INDICES["text"], self.scale, False)
 
