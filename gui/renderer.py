@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 
 from sixel import (
     create_pixel_buffer,
+    clear_pixel_buffer,
     pixels_to_sixel,
     fill_rect,
     draw_rect_border,
@@ -67,38 +68,31 @@ class GUIRenderer:
         self.title_bar_height = 36
         self.component_padding = 9
 
-    def render_frame(self, gui_state: GUIState, dirty_windows: Optional[List[int]] = None) -> str:
+        # Reusable pixel buffer (created once, cleared each frame)
+        self._pixels = create_pixel_buffer(width, height, COLOR_INDICES["background"])
+        self._bg_color = COLOR_INDICES["background"]
+
+    def render_frame(self, gui_state: GUIState) -> str:
         """
         Render the GUI state as a sixel string.
 
         Args:
             gui_state: The GUI state to render
-            dirty_windows: Optional list of window indices to render (None = all)
 
         Returns:
             Sixel escape sequence string
         """
-        # Create pixel buffer with background
-        pixels = create_pixel_buffer(
-            self.width,
-            self.height,
-            COLOR_INDICES["background"]
-        )
+        # Clear and reuse pixel buffer
+        clear_pixel_buffer(self._pixels, self._bg_color)
 
-        # Render windows (all or only dirty ones)
-        windows_to_render = gui_state.windows
-        if dirty_windows is not None:
-            # Even with partial dirty, render all for consistent display
-            # The optimization is in the caller not calling render at all
-            pass
-
-        for window in windows_to_render:
-            self._render_window(pixels, window)
+        # Render all windows
+        for window in gui_state.windows:
+            self._render_window(self._pixels, window)
 
         # Draw instructions at bottom
-        self._draw_instructions(pixels)
+        self._draw_instructions(self._pixels)
 
-        return pixels_to_sixel(pixels, self.width, self.height)
+        return pixels_to_sixel(self._pixels, self.width, self.height)
 
     def get_window_rows(self, gui_state: GUIState) -> List[List[int]]:
         """

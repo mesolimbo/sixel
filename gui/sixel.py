@@ -196,6 +196,10 @@ def rgb_to_sixel_color(r: int, g: int, b: int) -> Tuple[int, int, int]:
     return (r * 100 // 255, g * 100 // 255, b * 100 // 255)
 
 
+# Cache the palette since it never changes
+_CACHED_PALETTE = None
+
+
 def generate_palette() -> str:
     """Generate the sixel color palette definitions including dynamic image colors."""
     palette = []
@@ -215,7 +219,14 @@ def generate_palette() -> str:
 
 def create_pixel_buffer(width: int, height: int, fill: int = 0) -> List[List[int]]:
     """Create a 2D pixel buffer filled with a color index."""
-    return [[fill for _ in range(width)] for _ in range(height)]
+    return [[fill] * width for _ in range(height)]
+
+
+def clear_pixel_buffer(pixels: List[List[int]], fill: int = 0) -> None:
+    """Clear an existing pixel buffer (faster than creating new one)."""
+    for row in pixels:
+        for i in range(len(row)):
+            row[i] = fill
 
 
 def set_pixel(pixels: List[List[int]], x: int, y: int, color_idx: int) -> None:
@@ -589,33 +600,42 @@ def _encode_rle(sixel_chars: List[int]) -> str:
 
 
 def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
-    """Convert a 2D pixel buffer to a sixel string."""
-    parts = [SIXEL_START]
-    parts.append(f'"1;1;{width};{height}')
-    parts.append(generate_palette())
+    """Convert a 2D pixel buffer to a sixel string (optimized)."""
+    parts = [SIXEL_START, f'"1;1;{width};{height}', generate_palette()]
 
-    colors_used = set()
-    colors_used.add(0)
-    for row in pixels:
-        for pixel in row:
-            colors_used.add(pixel)
+    # Pre-compute bit masks for speed
+    bit_masks = [1, 2, 4, 8, 16, 32]
 
     for band_start in range(0, height, 6):
         if band_start > 0:
             parts.append(SIXEL_NEWLINE)
 
+        # Get the rows for this band (up to 6)
+        band_end = min(band_start + 6, height)
+        band_rows = [pixels[y] for y in range(band_start, band_end)]
+        num_rows = len(band_rows)
+
+        # Find colors used in this band only
+        colors_in_band = set()
+        for row in band_rows:
+            colors_in_band.update(row)
+
         first_color = True
-        for color_idx in sorted(colors_used):
+        for color_idx in sorted(colors_in_band):
+            # Build sixel values for this color
             sixel_values = []
+            has_nonzero = False
+
             for x in range(width):
                 sixel_value = 0
-                for bit in range(6):
-                    y = band_start + bit
-                    if y < height and pixels[y][x] == color_idx:
-                        sixel_value |= (1 << bit)
+                for bit in range(num_rows):
+                    if band_rows[bit][x] == color_idx:
+                        sixel_value |= bit_masks[bit]
                 sixel_values.append(sixel_value)
+                if sixel_value:
+                    has_nonzero = True
 
-            if all(v == 0 for v in sixel_values):
+            if not has_nonzero:
                 continue
 
             if not first_color:
@@ -623,10 +643,43 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
             first_color = False
 
             parts.append(f"#{color_idx}")
-            parts.append(_encode_rle(sixel_values))
+            parts.append(_encode_rle_fast(sixel_values))
 
     parts.append(SIXEL_END)
     return "".join(parts)
+
+
+def _encode_rle_fast(sixel_chars: List[int]) -> str:
+    """Encode sixel values using RLE (optimized)."""
+    if not sixel_chars:
+        return ""
+
+    result = []
+    n = len(sixel_chars)
+    i = 0
+
+    while i < n:
+        char = sixel_chars[i]
+        count = 1
+
+        # Count consecutive identical values
+        j = i + 1
+        while j < n and sixel_chars[j] == char:
+            count += 1
+            j += 1
+
+        sixel_char = chr(63 + char)
+        if count >= 3:
+            result.append(f"!{count}{sixel_char}")
+        elif count == 2:
+            result.append(sixel_char)
+            result.append(sixel_char)
+        else:
+            result.append(sixel_char)
+
+        i = j
+
+    return "".join(result)
 
 
 def _get_color_index_to_rgb() -> Dict[int, Tuple[int, int, int]]:
