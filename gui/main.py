@@ -189,21 +189,21 @@ def create_demo_gui() -> GUIState:
         x=input_x, y=input_y_start,
         width=window_width - 30, height=42,
         placeholder="NAME...",
-        max_length=15
+        max_length=100
     ))
 
     input_window.add_component(TextInput(
         x=input_x, y=input_y_start + 57,
         width=window_width - 30, height=42,
         placeholder="EMAIL...",
-        max_length=20
+        max_length=100
     ))
 
     input_window.add_component(TextInput(
         x=input_x, y=input_y_start + 114,
         width=window_width - 30, height=42,
         placeholder="PASSWORD...",
-        max_length=15
+        max_length=100
     ))
 
     gui.add_window(input_window)

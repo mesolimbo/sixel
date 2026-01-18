@@ -321,13 +321,14 @@ class GUIRenderer:
         text_x = text_input.x + self.component_padding
         text_y = text_input.y + (text_input.height - FONT_HEIGHT * self.scale) // 2
         cursor_width = 3  # 1.5x cursor width
-        available_width = text_input.width - self.component_padding * 2 - cursor_width
-        text_right_edge = text_x + available_width
+        # Cursor gap: treat cursor like a character (half char width on each side)
+        char_advance = (5 + 1) * self.scale  # FONT_WIDTH is 5
+        cursor_gap = (char_advance - cursor_width) // 2  # ~4-5 pixels padding
+        available_width = text_input.width - self.component_padding * 2 - cursor_width - cursor_gap
 
         # Cursor blink: use blue color (input_focus) and slow blink
         cursor_visible = True
         if text_input.has_focus:
-            # Slow blink: cursor visible for half the cycle
             blink_phase = time.time() % (self._cursor_blink_interval * 2)
             cursor_visible = blink_phase < self._cursor_blink_interval
 
@@ -335,54 +336,45 @@ class GUIRenderer:
             text = text_input.text
             cursor_pos = text_input.cursor_pos
 
-            # Calculate cursor position in pixels from start of text
+            # Calculate full text width and cursor position
+            full_text_width = get_text_width(text, self.scale, False)
             cursor_pixel_offset = get_text_width(text[:cursor_pos], self.scale, False)
 
-            # Calculate scroll offset to keep cursor visible
-            # We want the cursor near the right edge when text overflows
-            scroll_offset = 0
-            if cursor_pixel_offset > available_width:
-                # Keep a small margin from the right edge
-                margin = min(20, available_width // 5)
-                scroll_offset = cursor_pixel_offset - available_width + margin
+            # If text fits, draw it all; otherwise find visible substring
+            if full_text_width <= available_width:
+                # Text fits - draw entire string
+                draw_text(pixels, text_x, text_y, text,
+                         COLOR_INDICES["text"], self.scale, False)
+                cursor_draw_x = text_x + cursor_pixel_offset + cursor_gap
+            else:
+                # Text overflows - find which characters are visible
+                # Keep cursor at right edge by scrolling (account for cursor gap)
+                scroll_offset = max(0, cursor_pixel_offset - available_width)
 
-            # Find which characters are visible and draw only those
-            # Track cumulative width as we iterate through characters
-            char_x = 0  # Position of current char relative to start of full text
-            draw_x = text_x  # Where to draw in the pixel buffer
+                # Find start index: first char whose right edge > scroll_offset
+                start_idx = max(0, scroll_offset // char_advance)
 
-            for i, char in enumerate(text):
-                char_width = get_text_width(char, self.scale, False)
-                char_end_x = char_x + char_width
+                # Find end index: last char whose left edge < scroll_offset + available_width
+                end_idx = min(len(text), (scroll_offset + available_width) // char_advance + 1)
 
-                # Character's position after applying scroll
-                visible_start = char_x - scroll_offset
-                visible_end = char_end_x - scroll_offset
+                # Get the visible substring
+                visible_text = text[start_idx:end_idx]
 
-                # Skip if character is entirely before the visible area
-                if visible_end <= 0:
-                    char_x = char_end_x
-                    continue
+                # Calculate where to draw: position of start_idx char minus scroll
+                start_char_x = get_text_width(text[:start_idx], self.scale, False)
+                draw_offset = start_char_x - scroll_offset
 
-                # Stop if character starts beyond the visible area
-                if visible_start >= available_width:
-                    break
+                # Draw the visible portion
+                draw_text(pixels, text_x + draw_offset, text_y, visible_text,
+                         COLOR_INDICES["text"], self.scale, False)
 
-                # Draw this character at the correct position
-                draw_pos = text_x + visible_start
-                # Only draw if the character starts within bounds
-                if draw_pos >= text_x and draw_pos < text_right_edge:
-                    draw_text(pixels, draw_pos, text_y, char,
-                             COLOR_INDICES["text"], self.scale, False)
+                cursor_draw_x = text_x + cursor_pixel_offset - scroll_offset + cursor_gap
 
-                char_x = char_end_x
-
-            # Draw cursor if focused and visible (blinking)
+            # Draw cursor with gap from text
             if text_input.has_focus and cursor_visible:
-                cursor_x = text_x + cursor_pixel_offset - scroll_offset
-                # Only draw cursor if it's within the visible text area
-                if text_x <= cursor_x < text_right_edge:
-                    fill_rect(pixels, cursor_x, text_y, cursor_width,
+                max_cursor_x = text_x + available_width + cursor_gap
+                if text_x <= cursor_draw_x <= max_cursor_x:
+                    fill_rect(pixels, cursor_draw_x, text_y, cursor_width,
                              FONT_HEIGHT * self.scale, COLOR_INDICES["input_focus"])
         else:
             # Show placeholder or cursor
