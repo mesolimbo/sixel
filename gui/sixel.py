@@ -4,9 +4,14 @@ Sixel graphics generation module for GUI demo.
 Sixel encodes 6 vertical pixels per character. Each character value is 63 + bitmask,
 where bit 0 = top pixel, bit 5 = bottom pixel.
 
+Also supports iTerm2 inline image protocol for better performance on iTerm2.
+
 Provides GUI-oriented color palette and drawing primitives for interactive components.
 """
 
+import base64
+import io
+import os
 from typing import List, Tuple, Dict, Optional
 from pathlib import Path
 
@@ -15,6 +20,14 @@ try:
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
+
+# Detect if running in iTerm2 (check TERM_PROGRAM environment variable)
+IS_ITERM2 = os.environ.get('TERM_PROGRAM', '').lower() == 'iterm.app'
+
+# iTerm2 inline image protocol escape sequences
+# Format: ESC ] 1337 ; File = [args] : base64data BEL
+ITERM2_IMAGE_START = "\x1b]1337;File=inline=1:"
+ITERM2_IMAGE_END = "\x07"  # BEL character
 
 # Sixel escape sequences
 SIXEL_START = "\x1bPq"
@@ -743,3 +756,61 @@ def pixels_to_png(
         img.save(output_path)
 
     return img
+
+
+def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
+    """
+    Convert a 2D pixel buffer to an iTerm2 inline image escape sequence.
+
+    This is much faster than sixel encoding on iTerm2 because:
+    - No palette quantization needed
+    - PNG compression is more efficient than sixel RLE
+    - iTerm2 handles the image natively without pixel re-processing
+
+    Args:
+        pixels: 2D array of color indices
+        width: Image width in pixels
+        height: Image height in pixels
+
+    Returns:
+        iTerm2 escape sequence string with embedded base64 PNG
+    """
+    if not PIL_AVAILABLE:
+        # Fall back to sixel if PIL not available
+        return pixels_to_sixel(pixels, width, height)
+
+    # Create PIL Image directly from pixel data
+    img = Image.new("RGB", (width, height))
+    color_map = _get_color_index_to_rgb()
+
+    # Build image data
+    img_data = []
+    for row in pixels:
+        for color_idx in row:
+            rgb = color_map.get(color_idx, (0, 0, 0))
+            img_data.append(rgb)
+
+    img.putdata(img_data)
+
+    # Encode to PNG in memory
+    buffer = io.BytesIO()
+    img.save(buffer, format='PNG', optimize=False, compress_level=1)
+    png_data = buffer.getvalue()
+
+    # Base64 encode
+    b64_data = base64.b64encode(png_data).decode('ascii')
+
+    # Return iTerm2 escape sequence
+    return f"{ITERM2_IMAGE_START}{b64_data}{ITERM2_IMAGE_END}"
+
+
+def get_preferred_image_encoder():
+    """
+    Get the best image encoding function for the current terminal.
+
+    Returns:
+        Function that converts pixels to terminal escape sequence
+    """
+    if IS_ITERM2 and PIL_AVAILABLE:
+        return pixels_to_iterm2
+    return pixels_to_sixel
