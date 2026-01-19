@@ -1,21 +1,26 @@
 # GUI Demo - Sixel Interactive Components
 
-A demonstration of interactive GUI components rendered using sixel graphics in the terminal. Features mouse click interaction for buttons, checkboxes, radio buttons, text inputs, sliders, progress bars, and list boxes.
+A proof-of-concept interactive terminal GUI framework demonstrating rich UI components rendered entirely in the terminal using Sixel graphics. Features interaction for buttons, checkboxes, radio buttons, text inputs, sliders, progress bars, list boxes, and image display.
+
+![GUI Demo](demo/gui_demo.gif)
 
 ## Features
 
-- **7 Demo Windows** showcasing different GUI components:
-  - **Buttons**: Click to increment counter
+- **8 Demo Windows** showcasing different GUI components:
+  - **Buttons**: Toggle press
   - **Checkboxes**: Toggle between checked/unchecked states
   - **Radio Buttons**: Mutually exclusive selection
-  - **Text Input**: Click to focus, type to enter text
+  - **Text Input**: Click to focus, type to enter text with blinking cursor
   - **Sliders**: Click to adjust value
-  - **Progress Bars**: Animated progress indicators
-  - **List Box**: Click to select items
+  - **Progress Bars**: Animated progress indicators with color states
+  - **List Box**: Scrollable item selection
+  - **Image Display**: Render PNG images with zoom controls
 
-- **Mouse Interaction**: Full mouse click support via ANSI mouse tracking (SGR extended mode)
-- **Keyboard Support**: Text input, quit with 'q'
+- **Keyboard Navigation**: Tab/Shift+Tab for window focus, arrow keys for component interaction
+- **Async Rendering**: Background thread rendering for responsive input handling
+- **Native iTerm2 Protocol**: Fast inline image rendering on macOS using JPEG encoding
 - **SOLID Architecture**: Clean, extensible component design
+- **YAML Configuration**: Build GUIs declaratively via config files with variable bindings
 - **Cross-Platform**: Works on Linux, macOS, and Windows
 
 ## Requirements
@@ -26,7 +31,6 @@ A demonstration of interactive GUI components rendered using sixel graphics in t
   - mlterm
   - xterm (compiled with +sixel)
   - Windows Terminal (with appropriate settings)
-- Terminal with mouse tracking support
 
 ## Installation
 
@@ -45,15 +49,16 @@ make install-dev
 make run
 
 # Or directly
-python main.py
+pipenv run python main.py
 ```
 
 ## Controls
 
-- **Mouse Click**: Interact with components
+- **Tab / Shift+Tab**: Navigate between windows
+- **Arrow Keys**: Navigate components in window, adjust sliders, zoom in/out on images
+- **Space / Enter**: Activate focused component
 - **Keyboard**: Type in focused text inputs
 - **Backspace**: Delete characters in text inputs
-- **Arrow Keys**: Move cursor in text inputs
 - **Q**: Quit the application
 
 ## Architecture
@@ -71,16 +76,19 @@ The project follows SOLID principles:
 ```
 gui/
 ├── main.py           # Entry point and demo setup
-├── app_loop.py       # Main event loop with mouse support
+├── app_loop.py       # Main event loop with async rendering
 ├── renderer.py       # Sixel rendering for all components
 ├── gui.py            # Component classes and state management
-├── sixel.py          # Sixel encoding and drawing primitives
+├── sixel.py          # Sixel/iTerm2 encoding and drawing primitives
+├── config.py         # YAML configuration system
 ├── terminals/        # Cross-platform terminal abstraction
 │   ├── __init__.py   # Factory and registry
-│   ├── base.py       # Abstract interfaces with mouse support
+│   ├── base.py       # Abstract interfaces
 │   ├── unix.py       # Unix/Linux/macOS implementation
 │   └── windows.py    # Windows implementation
 ├── tests/            # Test suite
+├── demo/             # Demo assets
+│   └── squirel.png   # Sample image for Image Display
 ├── Makefile          # Build and test commands
 └── Pipfile           # Dependencies
 ```
@@ -94,9 +102,21 @@ make test
 # Run unit tests only
 make unit
 
+# Run visual tests only (with screenshots)
+make e2e
+
 # Run with coverage
 make coverage
 ```
+
+## Performance
+
+The framework includes several optimizations for smooth rendering:
+
+- **Async Rendering**: Background thread handles frame rendering without blocking input
+- **State Hashing**: Only re-renders when component state actually changes
+- **Native iTerm2 Protocol**: Uses inline image protocol with JPEG encoding on macOS for fast rendering
+- **Platform-Aware Scaling**: 2x UI scale on macOS/iTerm2 for Retina displays, 1x elsewhere
 
 ## License
 

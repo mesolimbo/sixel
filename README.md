@@ -34,6 +34,22 @@ A fully playable snake game rendered entirely in Sixel graphics, including a cus
 
 [See the Snake README for details](snake/README.md)
 
+### Interactive GUI Framework
+
+A proof-of-concept interactive terminal GUI framework demonstrating rich UI components rendered entirely in the terminal using Sixel graphics (and PNG animation on iTerm2).
+
+![GUI Demo](gui/demo/gui_demo.gif)
+
+**Features:**
+- 8 interactive component types: Buttons, Checkboxes, Radio Buttons, Text Input, Sliders, Progress Bars, List Boxes, and Image Display
+- Keyboard navigation with Tab/Shift+Tab and arrow keys
+- Cross-platform support (Windows/macOS/Linux)
+- Async rendering for responsive input handling
+- Native iTerm2 inline image protocol for fast macOS rendering
+- YAML-based declarative GUI configuration
+
+[See the GUI README for details](gui/README.md)
+
 ## Terminal Compatibility
 
 Sixel graphics require a compatible terminal emulator:
@@ -70,16 +86,29 @@ sixel/
 │   ├── metrics.py
 │   └── demo/
 │       └── screenshot.png
-└── snake/             # Snake game project
+├── snake/             # Snake game project
+│   ├── README.md
+│   ├── Makefile
+│   ├── Pipfile
+│   ├── main.py
+│   ├── game.py
+│   ├── sixel.py
+│   ├── renderer.py
+│   └── demo/
+│       └── sixel-snake.gif
+└── gui/               # Interactive GUI framework
     ├── README.md
     ├── Makefile
     ├── Pipfile
     ├── main.py
-    ├── game.py
-    ├── sixel.py
+    ├── app_loop.py
+    ├── gui.py
     ├── renderer.py
+    ├── sixel.py
+    ├── config.py
+    ├── terminals/
     └── demo/
-        └── sixel-snake.gif
+        └── squirel.png
 ```
 
 ## About Sixel
