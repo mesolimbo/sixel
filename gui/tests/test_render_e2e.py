@@ -23,7 +23,14 @@ from gui import (
     ProgressBar,
     ListBox,
 )
-from sixel import SIXEL_START, SIXEL_END
+from sixel import SIXEL_START, SIXEL_END, ITERM2_IMAGE_START, ITERM2_IMAGE_END, IS_ITERM2
+
+
+def frame_has_valid_format(frame: str) -> bool:
+    """Check if frame output has a valid terminal graphics format (sixel or iTerm2)."""
+    if IS_ITERM2:
+        return frame.startswith(ITERM2_IMAGE_START) and frame.endswith(ITERM2_IMAGE_END)
+    return frame.startswith(SIXEL_START) and frame.endswith(SIXEL_END)
 
 
 class TestFullGUIRendering:
@@ -80,8 +87,7 @@ class TestFullGUIRendering:
         frame = renderer.render_frame(gui)
 
         # Verify output structure
-        assert frame.startswith(SIXEL_START)
-        assert frame.endswith(SIXEL_END)
+        assert frame_has_valid_format(frame)
 
         # Verify reasonable output size
         assert len(frame) > 1000  # Should have substantial content
@@ -110,8 +116,7 @@ class TestFullGUIRendering:
         renderer = GUIRenderer(width=250, height=180)
         frame = renderer.render_frame(gui)
 
-        assert frame.startswith(SIXEL_START)
-        assert frame.endswith(SIXEL_END)
+        assert frame_has_valid_format(frame)
 
         # Verify state changes
         assert btn.toggled is True
@@ -137,8 +142,7 @@ class TestFullGUIRendering:
         renderer = GUIRenderer(width=220, height=100)
         frame = renderer.render_frame(gui)
 
-        assert frame.startswith(SIXEL_START)
-        assert frame.endswith(SIXEL_END)
+        assert frame_has_valid_format(frame)
 
     def test_render_listbox_with_selection(self):
         """Test rendering list box with selected item."""
@@ -153,8 +157,7 @@ class TestFullGUIRendering:
         renderer = GUIRenderer(width=170, height=180)
         frame = renderer.render_frame(gui)
 
-        assert frame.startswith(SIXEL_START)
-        assert frame.endswith(SIXEL_END)
+        assert frame_has_valid_format(frame)
 
 
 class TestRenderingPerformance:

@@ -28,7 +28,14 @@ from gui import (
     ListBox,
     ImageDisplay,
 )
-from sixel import SIXEL_START, SIXEL_END
+from sixel import SIXEL_START, SIXEL_END, ITERM2_IMAGE_START, ITERM2_IMAGE_END, IS_ITERM2
+
+
+def frame_has_valid_format(frame: str) -> bool:
+    """Check if frame output has a valid terminal graphics format (sixel or iTerm2)."""
+    if IS_ITERM2:
+        return frame.startswith(ITERM2_IMAGE_START) and frame.endswith(ITERM2_IMAGE_END)
+    return frame.startswith(SIXEL_START) and frame.endswith(SIXEL_END)
 
 
 class TestRendererInit:
@@ -56,8 +63,7 @@ class TestRenderFrame:
         gui = GUIState()
         frame = renderer.render_frame(gui)
 
-        assert frame.startswith(SIXEL_START)
-        assert frame.endswith(SIXEL_END)
+        assert frame_has_valid_format(frame)
 
     def test_render_with_window(self):
         """Test rendering GUI with a window."""
@@ -67,8 +73,7 @@ class TestRenderFrame:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
-        assert frame.endswith(SIXEL_END)
+        assert frame_has_valid_format(frame)
 
 
 class TestComponentRendering:
@@ -83,7 +88,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_checkbox(self):
         """Test rendering a checkbox."""
@@ -94,7 +99,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_radio_button(self):
         """Test rendering radio buttons."""
@@ -113,7 +118,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_text_input(self):
         """Test rendering a text input."""
@@ -125,7 +130,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_text_input_with_text(self):
         """Test rendering a text input with content."""
@@ -140,7 +145,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_slider(self):
         """Test rendering a slider."""
@@ -151,7 +156,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_progress_bar(self):
         """Test rendering a progress bar."""
@@ -162,7 +167,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_listbox(self):
         """Test rendering a list box."""
@@ -173,7 +178,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_image_display_no_image(self):
         """Test rendering an image display without an image."""
@@ -184,7 +189,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_image_display_with_image(self):
         """Test rendering an image display with an image."""
@@ -196,7 +201,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_image_display_zoomed_in(self):
         """Test rendering an image display zoomed in."""
@@ -210,7 +215,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
     def test_render_image_display_zoomed_out(self):
         """Test rendering an image display zoomed out."""
@@ -224,7 +229,7 @@ class TestComponentRendering:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
 
 class TestMultipleWindows:
@@ -244,8 +249,7 @@ class TestMultipleWindows:
         gui.add_window(w2)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
-        assert frame.endswith(SIXEL_END)
+        assert frame_has_valid_format(frame)
 
 
 class TestDisabledComponents:
@@ -263,7 +267,7 @@ class TestDisabledComponents:
         gui.add_window(window)
 
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
 
 
 class TestHiddenComponents:
@@ -282,4 +286,4 @@ class TestHiddenComponents:
 
         # Should render without errors
         frame = renderer.render_frame(gui)
-        assert frame.startswith(SIXEL_START)
+        assert frame_has_valid_format(frame)
