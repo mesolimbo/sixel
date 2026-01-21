@@ -261,13 +261,17 @@ class WindowsTerminal(Terminal):
                         # If parsing failed, treat as unknown
                         return None
 
-                    # Parse arrow keys (ESC [ A/B/C/D)
+                    # Parse arrow keys and other CSI sequences (ESC [ X)
                     if len(self._input_buffer) >= 3 and self._input_buffer[1] == '[':
-                        arrow_char = self._input_buffer[2]
+                        seq_char = self._input_buffer[2]
                         arrow_map = {'A': 'up', 'B': 'down', 'C': 'right', 'D': 'left'}
-                        if arrow_char in arrow_map:
+                        if seq_char in arrow_map:
                             self._input_buffer = ""
-                            return KeyEvent.arrow(arrow_map[arrow_char])
+                            return KeyEvent.arrow(arrow_map[seq_char])
+                        # Shift+Tab sends ESC [ Z on modern Windows Terminal
+                        if seq_char == 'Z':
+                            self._input_buffer = ""
+                            return KeyEvent.special('shift-tab')
 
                     # Just escape key
                     self._input_buffer = ""
@@ -286,6 +290,9 @@ class WindowsTerminal(Terminal):
                         arrow_codes = {'H': 'up', 'P': 'down', 'K': 'left', 'M': 'right'}
                         if special_char in arrow_codes:
                             return KeyEvent.arrow(arrow_codes[special_char])
+                        # Shift+Tab sends \x00\x0f (0x0F = 15) on Windows
+                        if ord(special_char) == 0x0F:
+                            return KeyEvent.special('shift-tab')
                         return KeyEvent.special(f'special-{ord(special_char)}')
                     return KeyEvent.special('special')
 

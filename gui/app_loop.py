@@ -176,6 +176,11 @@ def process_key_event(event: KeyEvent, gui_state: GUIState) -> tuple[bool, bool]
             gui_state.focus_next()
             return True, True
 
+        # Shift+Tab navigation (reverse)
+        if key == 'shift-tab':
+            gui_state.focus_previous()
+            return True, True
+
         # Enter/Space to activate
         if key in ('enter', 'space') and not is_text_input:
             if focused:

@@ -255,6 +255,9 @@ class UnixTerminal(Terminal):
                 if seq[1] == '[':
                     if seq[2] in arrow_map:
                         return KeyEvent.arrow(arrow_map[seq[2]])
+                    # Shift+Tab sends ESC [ Z
+                    if seq[2] == 'Z':
+                        return KeyEvent.special('shift-tab')
                     return KeyEvent.special(f'csi-{seq[2]}')
                 # SS3 format: ESC O A/B/C/D (used by some macOS terminals)
                 elif seq[1] == 'O':
