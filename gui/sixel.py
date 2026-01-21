@@ -215,12 +215,22 @@ def rgb_to_sixel_color(r: int, g: int, b: int) -> Tuple[int, int, int]:
     return (r * 100 // 255, g * 100 // 255, b * 100 // 255)
 
 
-# Cache the palette since it never changes
-_CACHED_PALETTE = None
+# Cache the palette since UI colors never change (only invalidate when image colors added)
+_CACHED_PALETTE: Optional[str] = None
+_CACHED_PALETTE_IMAGE_COUNT: int = 0
 
 
 def generate_palette() -> str:
-    """Generate the sixel color palette definitions including dynamic image colors."""
+    """Generate the sixel color palette definitions including dynamic image colors.
+
+    Uses caching to avoid regenerating the palette string every frame.
+    """
+    global _CACHED_PALETTE, _CACHED_PALETTE_IMAGE_COUNT
+
+    # Return cached palette if image colors haven't changed
+    if _CACHED_PALETTE is not None and _CACHED_PALETTE_IMAGE_COUNT == len(_IMAGE_COLORS):
+        return _CACHED_PALETTE
+
     palette = []
     # Add UI colors
     for name, (r, g, b) in COLORS.items():
@@ -233,7 +243,9 @@ def generate_palette() -> str:
         sr, sg, sb = rgb_to_sixel_color(r, g, b)
         palette.append(f"#{idx};2;{sr};{sg};{sb}")
 
-    return "".join(palette)
+    _CACHED_PALETTE = "".join(palette)
+    _CACHED_PALETTE_IMAGE_COUNT = len(_IMAGE_COLORS)
+    return _CACHED_PALETTE
 
 
 def create_pixel_buffer(width: int, height: int, fill: int = 0) -> List[List[int]]:
@@ -637,52 +649,63 @@ def _encode_rle(sixel_chars: List[int]) -> str:
 
 
 def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
-    """Convert a 2D pixel buffer to a sixel string (optimized)."""
+    """Convert a 2D pixel buffer to a sixel string (optimized).
+
+    Optimizations applied:
+    - Palette caching (via generate_palette)
+    - Fast color detection using set operations
+    - Efficient sixel value computation with precomputed masks
+    - Local variable caching for inner loop speed
+    """
     parts = [SIXEL_START, f'"1;1;{width};{height}', generate_palette()]
 
-    # Pre-compute bit masks for speed
-    bit_masks = [1, 2, 4, 8, 16, 32]
+    # Pre-compute bit masks as tuple for faster indexing
+    bit_masks = (1, 2, 4, 8, 16, 32)
 
-    # Get background color index for optimization
+    # Get background color index for optimization (cache locally)
     bg_color = COLOR_INDICES.get("background", 0)
+
+    # Local references for speed in tight loops
+    parts_append = parts.append
 
     for band_start in range(0, height, 6):
         if band_start > 0:
-            parts.append(SIXEL_NEWLINE)
+            parts_append(SIXEL_NEWLINE)
 
         # Get the rows for this band (up to 6)
         band_end = min(band_start + 6, height)
         band_rows = [pixels[y] for y in range(band_start, band_end)]
         num_rows = len(band_rows)
 
-        # Find colors used in this band only (excluding background for optimization)
-        colors_in_band = set()
-        for row in band_rows:
-            for pixel in row:
-                if pixel != bg_color:
-                    colors_in_band.add(pixel)
+        # Find colors used in this band using set union (faster than nested loops)
+        # This uses set.union with unpacked sets from each row
+        colors_in_band = set().union(*band_rows)
+        colors_in_band.discard(bg_color)  # Remove background for the check
 
         # Fast path: if band only has background, output a single background run
         if not colors_in_band:
-            # Output background color as a single RLE run for the whole band
-            parts.append(f"#{bg_color}!{width}?")  # '?' is sixel char for value 0 (no bits set)
+            parts_append(f"#{bg_color}!{width}?")
             continue
 
-        # Add background to colors to render (needed for proper display)
+        # Add background back for rendering
         colors_in_band.add(bg_color)
+
+        # Precompute row/mask pairs for the inner loop
+        row_masks = [(band_rows[bit], bit_masks[bit]) for bit in range(num_rows)]
 
         first_color = True
         for color_idx in sorted(colors_in_band):
-            # Build sixel values for this color
+            # Build sixel values for this color using optimized iteration
             sixel_values = []
+            sixel_append = sixel_values.append
             has_nonzero = False
 
             for x in range(width):
                 sixel_value = 0
-                for bit in range(num_rows):
-                    if band_rows[bit][x] == color_idx:
-                        sixel_value |= bit_masks[bit]
-                sixel_values.append(sixel_value)
+                for row, mask in row_masks:
+                    if row[x] == color_idx:
+                        sixel_value |= mask
+                sixel_append(sixel_value)
                 if sixel_value:
                     has_nonzero = True
 
@@ -690,13 +713,13 @@ def pixels_to_sixel(pixels: List[List[int]], width: int, height: int) -> str:
                 continue
 
             if not first_color:
-                parts.append(SIXEL_CARRIAGE_RETURN)
+                parts_append(SIXEL_CARRIAGE_RETURN)
             first_color = False
 
-            parts.append(f"#{color_idx}")
-            parts.append(_encode_rle_fast(sixel_values))
+            parts_append(f"#{color_idx}")
+            parts_append(_encode_rle_fast(sixel_values))
 
-    parts.append(SIXEL_END)
+    parts_append(SIXEL_END)
     return "".join(parts)
 
 
