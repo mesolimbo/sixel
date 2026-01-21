@@ -115,7 +115,7 @@ def register_image_colors(colors: List[Tuple[int, int, int]]) -> Dict[Tuple[int,
     Returns:
         Dictionary mapping RGB tuples to their palette indices
     """
-    global _NEXT_IMAGE_COLOR_INDEX, _ITERM2_COLOR_TABLE
+    global _NEXT_IMAGE_COLOR_INDEX, _ITERM2_COLOR_TABLE, _ITERM2_PALETTE_BYTES
 
     color_map = {}
     new_colors_added = False
@@ -131,6 +131,7 @@ def register_image_colors(colors: List[Tuple[int, int, int]]) -> Dict[Tuple[int,
     # Invalidate iTerm2 color cache if new colors were added
     if new_colors_added:
         _ITERM2_COLOR_TABLE = None
+        _ITERM2_PALETTE_BYTES = None
 
     return color_map
 
@@ -766,6 +767,7 @@ def pixels_to_png(
 
 # Cache for iTerm2 color lookup table (built once, reused)
 _ITERM2_COLOR_TABLE: Optional[List[Tuple[int, int, int]]] = None
+_ITERM2_PALETTE_BYTES: Optional[bytes] = None
 
 
 def _get_iterm2_color_table() -> List[Tuple[int, int, int]]:
@@ -782,10 +784,26 @@ def _get_iterm2_color_table() -> List[Tuple[int, int, int]]:
     return _ITERM2_COLOR_TABLE
 
 
+def _get_iterm2_palette_bytes() -> bytes:
+    """Get or build a 256-color palette byte string for paletted PNGs."""
+    global _ITERM2_PALETTE_BYTES
+    if _ITERM2_PALETTE_BYTES is None:
+        color_table = _get_iterm2_color_table()
+        palette = bytearray(256 * 3)
+        for idx, (r, g, b) in enumerate(color_table[:256]):
+            base = idx * 3
+            palette[base] = r
+            palette[base + 1] = g
+            palette[base + 2] = b
+        _ITERM2_PALETTE_BYTES = bytes(palette)
+    return _ITERM2_PALETTE_BYTES
+
+
 def invalidate_iterm2_color_cache() -> None:
     """Invalidate the iTerm2 color cache (call after registering new image colors)."""
-    global _ITERM2_COLOR_TABLE
+    global _ITERM2_COLOR_TABLE, _ITERM2_PALETTE_BYTES
     _ITERM2_COLOR_TABLE = None
+    _ITERM2_PALETTE_BYTES = None
 
 
 def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
@@ -794,7 +812,7 @@ def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
 
     Optimized for speed with:
     - Pre-built color lookup table for O(1) access
-    - JPEG encoding (faster than PNG, hardware accelerated on macOS)
+    - Paletted PNG encoding when possible (1 byte per pixel, lossless)
     - Direct byte array construction
 
     Args:
@@ -809,31 +827,47 @@ def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
         # Fall back to sixel if PIL not available
         return pixels_to_sixel(pixels, width, height)
 
-    # Get cached color table for fast lookup
+    # Prefer paletted PNG when possible (faster + smaller, no quality loss)
     color_table = _get_iterm2_color_table()
-    table_len = len(color_table)
+    max_color_idx = len(color_table) - 1
+    use_palette = max_color_idx < 256
 
-    # Build raw RGB bytes directly
-    rgb_bytes = bytearray(width * height * 3)
-    idx = 0
-    for row in pixels:
-        for color_idx in row:
-            if color_idx < table_len:
-                r, g, b = color_table[color_idx]
-            else:
-                r, g, b = 0, 0, 0
-            rgb_bytes[idx] = r
-            rgb_bytes[idx + 1] = g
-            rgb_bytes[idx + 2] = b
-            idx += 3
+    if use_palette:
+        # Build palette-indexed bytes (1 byte per pixel)
+        index_bytes = bytearray(width * height)
+        idx = 0
+        for row in pixels:
+            for color_idx in row:
+                index_bytes[idx] = color_idx
+                idx += 1
 
-    # Create image from raw bytes
-    img = Image.frombytes("RGB", (width, height), bytes(rgb_bytes))
+        img = Image.frombytes("P", (width, height), bytes(index_bytes))
+        img.putpalette(_get_iterm2_palette_bytes())
 
-    # Encode to JPEG - faster than PNG, especially on macOS
-    buffer = io.BytesIO()
-    img.save(buffer, format='JPEG', quality=90)
-    image_data = buffer.getvalue()
+        buffer = io.BytesIO()
+        img.save(buffer, format='PNG', optimize=False, compress_level=1)
+        image_data = buffer.getvalue()
+    else:
+        # Fallback to JPEG for large color palettes
+        table_len = len(color_table)
+        rgb_bytes = bytearray(width * height * 3)
+        idx = 0
+        for row in pixels:
+            for color_idx in row:
+                if color_idx < table_len:
+                    r, g, b = color_table[color_idx]
+                else:
+                    r, g, b = 0, 0, 0
+                rgb_bytes[idx] = r
+                rgb_bytes[idx + 1] = g
+                rgb_bytes[idx + 2] = b
+                idx += 3
+
+        img = Image.frombytes("RGB", (width, height), bytes(rgb_bytes))
+
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=90)
+        image_data = buffer.getvalue()
 
     # Base64 encode
     b64_data = base64.b64encode(image_data).decode('ascii')
