@@ -128,6 +128,38 @@ class TestProcessKeyEvent:
         should_continue, needs_render = process_key_event(key, gui)
         assert gui.get_focused_window() is window1
 
+    def test_shift_tab_navigation(self):
+        """Test shift+tab key navigates backwards between windows."""
+        gui = GUIState()
+
+        window1 = Window(title="WIN1", x=0, y=0, width=100, height=100)
+        window1.add_component(Button(10, 30, 80, 25, "BTN1"))
+        gui.add_window(window1)
+
+        window2 = Window(title="WIN2", x=110, y=0, width=100, height=100)
+        window2.add_component(Button(120, 30, 80, 25, "BTN2"))
+        gui.add_window(window2)
+
+        # Focus first window using tab
+        tab_key = KeyEvent.special('tab')
+        process_key_event(tab_key, gui)
+        assert gui.get_focused_window() is window1
+
+        # Tab to second window
+        process_key_event(tab_key, gui)
+        assert gui.get_focused_window() is window2
+
+        # Shift+Tab - go back to first window
+        shift_tab_key = KeyEvent.special('shift-tab')
+        should_continue, needs_render = process_key_event(shift_tab_key, gui)
+        assert should_continue is True
+        assert needs_render is True
+        assert gui.get_focused_window() is window1
+
+        # Shift+Tab again - wrap to second window (last window)
+        should_continue, needs_render = process_key_event(shift_tab_key, gui)
+        assert gui.get_focused_window() is window2
+
     def test_space_activates_button(self):
         """Test space key toggles focused button."""
         gui = GUIState()
