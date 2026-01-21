@@ -19,6 +19,7 @@ from config import (
     LayoutConfig,
     Binding,
     GUIConfig,
+    PLATFORM_SCALE,
 )
 from gui import (
     Button,
@@ -36,18 +37,19 @@ class TestLayoutConfig:
     """Tests for layout configuration parsing."""
 
     def test_default_values(self):
-        """Test that default layout values are applied."""
+        """Test that default layout values are applied (scaled for platform)."""
         layout = parse_layout({})
-        assert layout.window_width == 240
-        assert layout.window_height == 210
-        assert layout.window_gap == 15
-        assert layout.start_x == 15
-        assert layout.start_y == 15
-        assert layout.title_bar_height == 36
-        assert layout.content_padding == 15
+        scale = PLATFORM_SCALE
+        assert layout.window_width == 240 * scale
+        assert layout.window_height == 210 * scale
+        assert layout.window_gap == 15 * scale
+        assert layout.start_x == 15 * scale
+        assert layout.start_y == 15 * scale
+        assert layout.title_bar_height == 36 * scale
+        assert layout.content_padding == 15 * scale
 
     def test_custom_values(self):
-        """Test that custom layout values override defaults."""
+        """Test that custom layout values override defaults (scaled for platform)."""
         config = {
             'layout': {
                 'window_width': 300,
@@ -60,13 +62,14 @@ class TestLayoutConfig:
             }
         }
         layout = parse_layout(config)
-        assert layout.window_width == 300
-        assert layout.window_height == 250
-        assert layout.window_gap == 20
-        assert layout.start_x == 10
-        assert layout.start_y == 10
-        assert layout.title_bar_height == 40
-        assert layout.content_padding == 20
+        scale = PLATFORM_SCALE
+        assert layout.window_width == 300 * scale
+        assert layout.window_height == 250 * scale
+        assert layout.window_gap == 20 * scale
+        assert layout.start_x == 10 * scale
+        assert layout.start_y == 10 * scale
+        assert layout.title_bar_height == 40 * scale
+        assert layout.content_padding == 20 * scale
 
 
 class TestBindings:
@@ -131,15 +134,16 @@ rows:
             return f.name
 
     def test_build_single_window(self, simple_config_file):
-        """Test building a GUI with a single window."""
+        """Test building a GUI with a single window (dimensions scaled for platform)."""
         gui, gui_config, width, height = build_gui_from_config(simple_config_file)
+        scale = PLATFORM_SCALE
 
         assert len(gui.windows) == 1
         assert gui.windows[0].title == "TEST"
-        assert gui.windows[0].x == 10
-        assert gui.windows[0].y == 10
-        assert gui.windows[0].width == 200
-        assert gui.windows[0].height == 150
+        assert gui.windows[0].x == 10 * scale
+        assert gui.windows[0].y == 10 * scale
+        assert gui.windows[0].width == 200 * scale
+        assert gui.windows[0].height == 150 * scale
 
         Path(simple_config_file).unlink()
 
@@ -399,37 +403,39 @@ rows:
             return f.name
 
     def test_window_positions(self, multi_row_config):
-        """Test that windows are positioned correctly in rows."""
+        """Test that windows are positioned correctly in rows (scaled for platform)."""
         gui, gui_config, width, height = build_gui_from_config(multi_row_config)
+        scale = PLATFORM_SCALE
 
         assert len(gui.windows) == 3
 
         # Row 1, Window 1
         assert gui.windows[0].title == "ROW1-WIN1"
-        assert gui.windows[0].x == 5
-        assert gui.windows[0].y == 5
+        assert gui.windows[0].x == 5 * scale
+        assert gui.windows[0].y == 5 * scale
 
         # Row 1, Window 2
         assert gui.windows[1].title == "ROW1-WIN2"
-        assert gui.windows[1].x == 115  # 5 + 100 + 10
-        assert gui.windows[1].y == 5
+        assert gui.windows[1].x == 115 * scale  # 5 + 100 + 10
+        assert gui.windows[1].y == 5 * scale
 
         # Row 2, Window 1
         assert gui.windows[2].title == "ROW2-WIN1"
-        assert gui.windows[2].x == 5
-        assert gui.windows[2].y == 115  # 5 + 100 + 10
+        assert gui.windows[2].x == 5 * scale
+        assert gui.windows[2].y == 115 * scale  # 5 + 100 + 10
 
         Path(multi_row_config).unlink()
 
     def test_frame_dimensions(self, multi_row_config):
-        """Test that frame dimensions are calculated correctly."""
+        """Test that frame dimensions are calculated correctly (scaled for platform)."""
         gui, gui_config, width, height = build_gui_from_config(multi_row_config)
+        scale = PLATFORM_SCALE
 
-        # Width: 2 windows * 100 + 1 gap * 10 + 2 margins * 5 = 220
-        assert width == 220
+        # Width: 2 windows * 100 + 1 gap * 10 + 2 margins * 5 = 220 (then scaled)
+        assert width == 220 * scale
 
-        # Height: 2 rows * 100 + 1 gap * 10 + 2 margins * 5 + 30 (extra) = 250
-        assert height == 250
+        # Height: 2 rows * 100 + 1 gap * 10 + 2 margins * 5 + 30 (extra) = 250 (then scaled)
+        assert height == 250 * scale
 
         Path(multi_row_config).unlink()
 
@@ -438,19 +444,21 @@ class TestDemoConfig:
     """Tests for the demo.yaml configuration file."""
 
     def test_demo_config_loads(self):
-        """Test that the demo config file loads successfully."""
+        """Test that the demo config file loads successfully (dimensions scaled for platform)."""
         demo_path = Path(__file__).parent.parent / 'demo.yaml'
         if not demo_path.exists():
             pytest.skip("demo.yaml not found")
 
         gui, gui_config, width, height = build_gui_from_config(str(demo_path))
+        scale = PLATFORM_SCALE
 
         # Should have 8 windows (4 per row, 2 rows)
         assert len(gui.windows) == 8
 
-        # Check frame dimensions match expected
-        assert width == 1035
-        assert height == 495
+        # Check frame dimensions match expected (scaled for platform)
+        # Base dimensions are 1035x495 (unscaled)
+        assert width == 1035 * scale
+        assert height == 495 * scale
 
     def test_demo_config_widgets(self):
         """Test that demo config creates all expected widgets."""
