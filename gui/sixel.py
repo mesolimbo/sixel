@@ -267,12 +267,23 @@ def fill_rect(
     w: int, h: int,
     color_idx: int
 ) -> None:
-    """Fill a rectangle in the pixel buffer."""
+    """Fill a rectangle in the pixel buffer (Optimized)."""
     height = len(pixels)
     width = len(pixels[0]) if height > 0 else 0
-    for py in range(max(0, y), min(height, y + h)):
-        for px in range(max(0, x), min(width, x + w)):
-            pixels[py][px] = color_idx
+
+    # Clip to buffer
+    x1 = max(0, x)
+    y1 = max(0, y)
+    x2 = min(width, x + w)
+    y2 = min(height, y + h)
+
+    if x2 <= x1 or y2 <= y1:
+        return
+
+    # Optimization: Use slice assignment which is much faster in CPython
+    row_segment = [color_idx] * (x2 - x1)
+    for py in range(y1, y2):
+        pixels[py][x1:x2] = row_segment
 
 
 def draw_horizontal_line(
@@ -788,27 +799,11 @@ def invalidate_iterm2_color_cache() -> None:
     _ITERM2_COLOR_TABLE = None
 
 
-def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
+def _pixels_to_iterm2_slow(pixels: List[List[int]], width: int, height: int) -> str:
     """
-    Convert a 2D pixel buffer to an iTerm2 inline image escape sequence.
-
-    Optimized for speed with:
-    - Pre-built color lookup table for O(1) access
-    - JPEG encoding (faster than PNG, hardware accelerated on macOS)
-    - Direct byte array construction
-
-    Args:
-        pixels: 2D array of color indices
-        width: Image width in pixels
-        height: Image height in pixels
-
-    Returns:
-        iTerm2 escape sequence string with embedded base64 image
+    Fallback implementation of pixels_to_iterm2 (original implementation).
+    Used when fast path fails (e.g. indices > 255).
     """
-    if not PIL_AVAILABLE:
-        # Fall back to sixel if PIL not available
-        return pixels_to_sixel(pixels, width, height)
-
     # Get cached color table for fast lookup
     color_table = _get_iterm2_color_table()
     table_len = len(color_table)
@@ -832,7 +827,7 @@ def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
 
     # Encode to JPEG - faster than PNG, especially on macOS
     buffer = io.BytesIO()
-    img.save(buffer, format='JPEG', quality=90)
+    img.save(buffer, format='JPEG', quality=85, optimize=False)
     image_data = buffer.getvalue()
 
     # Base64 encode
@@ -840,6 +835,60 @@ def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
 
     # Return iTerm2 escape sequence
     return f"{ITERM2_IMAGE_START}{b64_data}{ITERM2_IMAGE_END}"
+
+
+def pixels_to_iterm2(pixels: List[List[int]], width: int, height: int) -> str:
+    """
+    Convert a 2D pixel buffer to an iTerm2 inline image escape sequence.
+
+    Optimized for speed using PIL Palette mode and fast bytes conversion.
+    This avoids iterating over millions of pixels in Python.
+
+    Args:
+        pixels: 2D array of color indices
+        width: Image width in pixels
+        height: Image height in pixels
+
+    Returns:
+        iTerm2 escape sequence string with embedded base64 image
+    """
+    if not PIL_AVAILABLE:
+        # Fall back to sixel if PIL not available
+        return pixels_to_sixel(pixels, width, height)
+
+    try:
+        # Fastest way to convert list of lists of ints to bytes in Python
+        # Note: This assumes all color_indices are < 256.
+        # Bytes construction and joining is highly optimized in CPython.
+        flat_bytes = b"".join(bytes(row) for row in pixels)
+
+        # Create image from palette indices directly
+        img = Image.frombytes('P', (width, height), flat_bytes)
+
+        # Build palette for PIL (flat list of r,g,b, r,g,b, ...)
+        color_map = _get_color_index_to_rgb()
+
+        # PIL 'P' mode palette must cover used indices.
+        # We fill up to 256 entries to be safe.
+        palette_data = []
+        for i in range(256):
+            rgb = color_map.get(i, (0, 0, 0))
+            palette_data.extend(rgb)
+
+        img.putpalette(palette_data)
+
+        # Convert to RGB and save as JPEG
+        # JPEG encoding is generally faster than PNG for this use case
+        buffer = io.BytesIO()
+        img.convert("RGB").save(buffer, format='JPEG', quality=85, optimize=False)
+        image_data = buffer.getvalue()
+
+        b64_data = base64.b64encode(image_data).decode('ascii')
+        return f"{ITERM2_IMAGE_START}{b64_data}{ITERM2_IMAGE_END}"
+
+    except (ValueError, TypeError, ImportError):
+        # Fallback to slow path if indices > 255 or other issues
+        return _pixels_to_iterm2_slow(pixels, width, height)
 
 
 def get_preferred_image_encoder():
